@@ -829,30 +829,68 @@ function updateURL() {
 
   /* ---------- camera control ---------- */
 
-  let dragging = false, lastX = 0, lastY = 0;
+  // Active pointers tracked by id so touch can distinguish a single
+  // finger (orbit) from two fingers (pinch-to-zoom). Mouse uses one
+  // pointer for orbit and the wheel for zoom.
+  const pointers = new Map();
+  let dragging = false, lastX = 0, lastY = 0, pinchDist = 0;
+
+  function clampDist() {
+    cam.tdist = Math.max(CONFIG.camera.minDistance,
+                Math.min(CONFIG.camera.maxDistance, cam.tdist));
+  }
+  function pinchSpan() {
+    const p = pointers.values();
+    const a = p.next().value, b = p.next().value;
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
   const onDown = (e) => {
-    dragging = true; lastX = e.clientX; lastY = e.clientY;
-    canvas.classList.add("grabbing");
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    if (pointers.size === 1) {
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      canvas.classList.add("grabbing");
+    } else if (pointers.size === 2) {
+      dragging = false;          // second finger down → pinch, not orbit
+      pinchDist = pinchSpan();
+    }
   };
   const onMove = (e) => {
-    if (!dragging) return;
-    cam.tyaw -= (e.clientX - lastX) * 0.005;
-    cam.tpitch += (e.clientY - lastY) * 0.005;
-    cam.tpitch = Math.max(-1.3, Math.min(1.3, cam.tpitch));
-    lastX = e.clientX; lastY = e.clientY;
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      const d = pinchSpan();
+      if (pinchDist > 0 && d > 0) {
+        cam.tdist *= pinchDist / d;   // fingers apart → smaller distance
+        clampDist();
+        window.dispatchEvent(new Event("bh-camera"));
+      }
+      pinchDist = d;
+    } else if (dragging) {
+      cam.tyaw -= (e.clientX - lastX) * 0.005;
+      cam.tpitch += (e.clientY - lastY) * 0.005;
+      cam.tpitch = Math.max(-1.3, Math.min(1.3, cam.tpitch));
+      lastX = e.clientX; lastY = e.clientY;
+    }
   };
   const onUp = (e) => {
-    const wasDragging = dragging;
-    dragging = false;
-    canvas.classList.remove("grabbing");
+    if (!pointers.delete(e.pointerId)) return;
     try { if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); } catch (_) {}
-    if (wasDragging) window.dispatchEvent(new Event("bh-camera"));
+    if (pointers.size === 1) {
+      // pinch dropped to one finger → resume orbit from the survivor
+      const p = pointers.values().next().value;
+      lastX = p.x; lastY = p.y; dragging = true;
+    } else if (pointers.size === 0) {
+      dragging = false;
+      canvas.classList.remove("grabbing");
+    }
+    window.dispatchEvent(new Event("bh-camera"));
   };
   const onWheel = (e) => {
     e.preventDefault();
     cam.tdist *= Math.exp(e.deltaY * 0.0012);
-    cam.tdist = Math.max(CONFIG.camera.minDistance, Math.min(CONFIG.camera.maxDistance, cam.tdist));
+    clampDist();
     window.dispatchEvent(new Event("bh-camera"));
   };
   function attachControls() {
@@ -865,6 +903,7 @@ function updateURL() {
   }
   function detachControls() {
     canvas.classList.remove("grabbable", "grabbing");
+    pointers.clear(); dragging = false; pinchDist = 0;
     canvas.removeEventListener("pointerdown", onDown);
     canvas.removeEventListener("pointermove", onMove);
     canvas.removeEventListener("pointerup", onUp);
