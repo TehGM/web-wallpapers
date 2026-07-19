@@ -18,6 +18,9 @@ Wallpaper at it as a web wallpaper.
 
 ## Controls
 
+Orbit the camera by dragging (mouse or one finger). Zoom with the mouse wheel
+or a two-finger pinch on touch screens.
+
 A slim toolbar sits on the right edge (dimmed until hovered):
 
 - 🎲 **Generate new** — random seed with the current settings.
