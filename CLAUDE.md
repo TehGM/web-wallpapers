@@ -165,6 +165,25 @@ in minutes. Restore the user's wallpaper by navigating back to its original
   on a desktop that may be offline, behind a filter, or embedded in a host with no
   network at all, and a CDN that disappears breaks it years later. If a dependency
   can't be redistributed for free, say so and pick a different one.
+- **Vendor it as a classic script, not an ES module** — a vendored `import`
+  breaks `file://`. Browsers fetch ES modules with CORS semantics and a
+  `file://` page has an opaque origin, so importing a sibling file is refused
+  ("CORS request not http"); the module never executes and the page is
+  silently blank. That kills double-clicking `index.html`, which is exactly
+  how someone opens the zip the deploy workflow builds. A plain `<script src>`
+  is not subject to this, and the page's own **inline** `type="module"` block
+  is still fine — only an *imported* file is blocked — so the shape is one
+  `<script src>` plus `const LIB = window.LIB`. Prefer a library's UMD/global
+  build; if it has none, concatenate its source into the inline module.
+- **Verify `file://` in a real browser, because neither usual environment
+  reproduces it.** Wallpaper Engine's CEF is *more* permissive and loads
+  file:// module imports happily, and the Claude Browser pane proxies file://
+  through http. Both will pass a page that a browser refuses. Use headless
+  Edge: `--headless=new --use-gl=swiftshader --virtual-time-budget=8000
+  --dump-dom`, then grep the dump for DOM the script generates (`class="row"`)
+  rather than trusting the exit code. Pair it with a positive control — a
+  two-page probe where one loads a classic script and one imports a module —
+  to prove the test can actually detect the failure.
 - Pin the exact version, and note in the file where a refresh comes from.
 - Size things in real proportions before reaching for glow. Correct proportions
   and subtle surface shading sell a form better than any effect.
