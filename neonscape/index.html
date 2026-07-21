@@ -1977,7 +1977,14 @@ const CITY_H_MAX = 1.9;                  // ceiling for the audio height pulse
     out of buildings on ultrawide displays. */
 function cityHalfWidth(){
   const d = -CITY_Z0 + 18;                   // horizon row → camera distance
-  const halfScreen = d * Math.tan(state.cam.fov * Math.PI / 360) * camera.aspect;
+  /* This sizes real geometry, so it never trusts a float it did not compute
+     itself. A non-finite aspect (see applyRendererSize) would otherwise
+     build a PlaneGeometry of NaN vertices; three then reports a NaN
+     bounding sphere and the driver answers INVALID_VALUE then
+     INVALID_OPERATION for two frames, until any resize quietly heals it. */
+  const asp = camera.aspect > 0 && Number.isFinite(camera.aspect)
+    ? camera.aspect : 1;
+  const halfScreen = d * Math.tan(state.cam.fov * Math.PI / 360) * asp;
   return Math.max(halfScreen * 1.06 * clamp(state.mtn.spread, 0.04, 1), 12);
 }
 /** spread falloff, 1 in the core → 0 at the edge. Shared by the shader
@@ -5465,7 +5472,12 @@ let rafId = 0, wePaused = false;
 const _v2 = new THREE.Vector2();
 
 function applyRendererSize(){
-  const w = window.innerWidth, h = window.innerHeight;
+  /* Floor at 1px: a host can lay the page out at 0x0 (offscreen, minimized,
+     or before it is first shown), and w/h would then be 0/0 = NaN. That NaN
+     lands in camera.aspect, poisoning the projection matrix and — because
+     cityHalfWidth() scales by aspect — every city vertex with it. The render
+     targets below were already floored the same way.                      */
+  const w = Math.max(1, window.innerWidth), h = Math.max(1, window.innerHeight);
   const dpr = Math.min(window.devicePixelRatio || 1, state.anim.dprCap) * QSCALE[qStep];
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
