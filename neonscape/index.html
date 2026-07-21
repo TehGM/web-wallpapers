@@ -385,12 +385,12 @@ const DEFAULTS = {
   seed: 80841,
   sky:   { top:'#070118', mid:'#2b0a56', bot:'#ff2d95', midPos:0.42, drift:0,
            fog:1.0 },
-  sun:   { on:true, mode:'sun', x:0, y:26, size:62,
+  sun:   { on:true, mode:'sun', x:0, y:41, size:62,
            c1:'#ffd319', c2:'#ff2975', c3:'#8c1eff',
-           bands:10, bandW:0.55, bandPos:0.52, glow:0.65, glowInt:1.0,
+           bands:10, bandW:0.55, bandPos:0.56, glow:0.65, glowInt:1.0,
            pulse:0.25, pulseSpd:0.5, ring:true, ringWidth:1.0,
            wireDetail:1, wireWidth:1 },
-  grid:  { on:true, color:'#00e5ff', glow:1.15, spacing:4.5, speed:1.0,
+  grid:  { on:true, color:'#00e5ff', glow:1.00, spacing:4.5, speed:1.0,
            amp:0, rough:1.0, terrNear:30,
            reflect:0.55, reflectScene:0.45, reflectBeams:0.5, reflectHue:0,
            colorMode:'solid', colors:['#00e5ff','#ff2d95','#7a2bff'],
@@ -423,7 +423,7 @@ const DEFAULTS = {
            weather:'none', rainAmt:0.5, stormFreq:1.0 },
   cam:   { fov:60, height:3.2, sway:0.5, swaySpd:0.5,
            dolly:0, dollySpd:0.5, orbit:0, orbitSpd:0.5 },
-  post:  { bloomStr:0.95, bloomThr:0.6,
+  post:  { bloomStr:0.16, bloomThr:0.6,
            vig:0.45, scan:0.35, grain:0.18, chroma:0.15,
            vhs:0, vhsCount:1 },
   audio: { on:false, src:'auto', smooth:0.05,
@@ -450,7 +450,7 @@ const DEFAULTS = {
            mSeaLevel:{band:'off',sens:0.4,boost:1},
            mFov:{band:'off',sens:0.5},
            mBeam:{band:'bass',sens:0.8,boost:1} },
-  anim:  { play:true, speed:1.0, fpsCap:60, adaptive:true, dprCap:1.5,
+  anim:  { play:true, speed:1.0, fpsCap:60, adaptive:true, dprCap:1.00,
            hue:0, hueShift:0 }
 };
 
