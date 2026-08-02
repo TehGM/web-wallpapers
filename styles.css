@@ -1,0 +1,195 @@
+:root{
+  --bg:#0e0e0e;
+  --card:#161514;
+  --shot:#060505;
+  --line:#262421;
+  --line-hover:#3f3b36;
+  --fg:#f4f1ec;
+  --fg-soft:#d9d4cd;
+  --muted:#8f8a83;
+  --muted-hi:#a19b93;
+  --dim:#7a756e;
+  --faint:#615d56;
+  --accent:#e08a5e;
+}
+*{box-sizing:border-box}
+h1,h2,h3,p{margin:0}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  background:var(--bg);
+  color:#bdb8b2;
+  font-family:'Space Grotesk',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+/* flex column so the footer can be pushed to the bottom on tall viewports;
+   flex-shrink:0 keeps it from squashing when the content overflows instead. */
+.page{
+  width:100%;max-width:980px;margin:0 auto;padding:56px 36px 48px;
+  flex:1 0 auto;display:flex;flex-direction:column;
+}
+
+/* ---- header ---- */
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:32px;flex-wrap:wrap}
+.back{
+  font-size:12px;font-weight:700;letter-spacing:4px;
+  color:var(--dim);text-decoration:none;
+  transition:color .15s ease;
+}
+.back:hover,.back:focus-visible{color:#e5e0d9}
+h1{margin-top:10px;font-size:54px;font-weight:700;letter-spacing:-1.5px;color:var(--fg);line-height:1.05}
+.intro{
+  max-width:420px;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:14px 18px;
+  font-size:13px;line-height:1.6;color:var(--muted-hi);
+  text-wrap:pretty;
+}
+.intro strong{color:#e5e0d9;font-weight:600}
+
+/* ---- toolbar above the grid ---- */
+.toolbar{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin-top:34px}
+.tool-btn{
+  font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.5px;
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 15px;border-radius:20px;
+  background:transparent;color:var(--fg-soft);border:1px solid #37342f;
+  text-decoration:none;cursor:pointer;
+  transition:border-color .15s ease,color .15s ease;
+}
+.tool-btn:hover,.tool-btn:focus-visible{border-color:#6b665f;color:var(--fg)}
+.tool-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* ---- grid ---- */
+.grid{display:grid;gap:30px;margin:14px 0 44px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:18px;
+  overflow:hidden;
+  box-shadow:0 16px 44px rgba(0,0,0,.5);
+  transition:border-color .15s ease;
+}
+.card:hover,.card:focus-within{border-color:var(--line-hover)}
+.shot{min-width:0;aspect-ratio:16/9;position:relative;background:var(--shot)}
+.shot a{display:block;width:100%;height:100%}
+.shot img{display:block;width:100%;height:100%;object-fit:cover}
+.body{padding:22px 26px 24px;display:flex;flex-direction:column;gap:15px;min-width:0}
+.name{font-size:26px;font-weight:700;color:var(--fg);letter-spacing:-.5px}
+/* Inline so the hit area is the text itself, not the full-width heading box. */
+.name a{color:inherit;text-decoration:none;transition:color .15s ease}
+.name a:hover,.name a:focus-visible{color:#fff}
+.meta{
+  display:flex;align-items:center;gap:8px;margin-top:6px;
+  font-size:11.5px;font-weight:600;letter-spacing:1.5px;color:var(--dim);
+}
+/* Uppercasing is presentational, so it lives here and the markup keeps ordinary
+   sentence case. Icon spacing is a margin rather than a flex gap so it does not
+   also apply to the generated separator below. */
+.badge{display:inline-flex;align-items:center;text-transform:uppercase}
+.badge svg{flex:none;margin-right:6px}
+.badge.audio{color:var(--accent)}
+/* Separators are generated, so the markup only lists the badges themselves.
+   ::after (rather than ::before on the following badge) puts the dot inside the
+   preceding badge, where the explicit colour also stops it inheriting accent. */
+.meta > :not(:last-child)::after{content:"·";margin-left:8px;color:#57534d}
+.desc{font-size:13.5px;line-height:1.6;color:var(--muted);text-wrap:pretty}
+
+/* ---- buttons ---- */
+.actions{display:flex;gap:9px;flex-wrap:wrap}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  text-decoration:none;font-size:13px;font-weight:700;
+  border-radius:24px;
+  transition:background-color .15s ease,border-color .15s ease;
+}
+.btn-primary{padding:11px 20px;background:var(--fg);color:#12100e;border:1px solid transparent}
+.btn-primary:hover,.btn-primary:focus-visible{background:#fff}
+.btn-ghost{padding:11px 18px;color:var(--fg-soft);border:1px solid #37342f}
+.btn-ghost:hover,.btn-ghost:focus-visible{border-color:#6b665f}
+
+/* ---- footer ---- */
+/* margin-top:auto pins the footer to the bottom when the viewport has room to
+   spare; the grid's own margin-bottom keeps the gap when it does not. */
+.foot{margin-top:auto;border-top:1px solid var(--line);padding-top:22px}
+.note{max-width:760px;margin:0 auto;text-align:center;font-size:12.5px;line-height:1.7;color:var(--dim);text-wrap:pretty}
+.note strong{color:var(--muted);font-weight:600}
+.copy{margin-top:28px;text-align:center;font-size:12px;letter-spacing:.5px;color:var(--faint)}
+.copy a{color:var(--dim);text-decoration:none;transition:color .15s ease}
+.copy a:hover,.copy a:focus-visible{color:#e5e0d9}
+
+/* ---- instructions dialog ---- */
+/* display must only be set on the open state — styling the element itself would
+   override the UA's `dialog:not([open]){display:none}` and leave it on screen. */
+.howto{
+  width:min(660px,calc(100vw - 32px));
+  max-height:min(84vh,760px);
+  padding:0;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--card);
+  color:#bdb8b2;
+  font-family:inherit;
+  box-shadow:0 30px 80px rgba(0,0,0,.65);
+  overflow:hidden;
+}
+.howto[open]{display:flex;flex-direction:column}
+.howto::backdrop{background:rgba(6,5,5,.74)}
+.howto-head{
+  flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;
+  padding:26px 26px 18px;border-bottom:1px solid var(--line);
+}
+.howto-title{font-size:21px;font-weight:700;color:var(--fg);letter-spacing:-.5px}
+.howto-close{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;margin:-4px -4px 0 0;
+  border:1px solid transparent;border-radius:50%;
+  background:transparent;color:var(--dim);cursor:pointer;
+  transition:color .15s ease,border-color .15s ease;
+}
+.howto-close:hover,.howto-close:focus-visible{color:var(--fg);border-color:#37342f}
+.howto-body{padding:20px 26px 26px;overflow-y:auto;font-size:13.5px;line-height:1.65;text-wrap:pretty}
+.howto-body strong{color:var(--fg-soft);font-weight:600}
+.howto-lead{color:var(--muted)}
+
+.steps{list-style:none;margin:20px 0 0;padding:0;display:flex;flex-direction:column;gap:20px}
+.step{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:14px;padding:16px 18px 18px}
+.step-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:9px}
+.step-n{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;
+  background:rgba(255,255,255,.07);color:var(--fg-soft);
+  font-size:11.5px;font-weight:700;
+}
+.step-title{font-size:15.5px;font-weight:700;color:var(--fg);letter-spacing:-.2px}
+.step p{color:var(--muted)}
+.step p + p{margin-top:9px}
+.tag{
+  margin-left:auto;flex:none;
+  font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  border-radius:20px;padding:4px 10px;
+}
+/* Orange means audio reactive here, matching the badge on the cards. */
+.tag-yes{color:var(--accent);border:1px solid rgba(224,138,94,.4)}
+.tag-no{color:var(--dim);border:1px solid #37342f}
+
+.howto-tip{
+  margin-top:20px;padding-top:18px;border-top:1px solid var(--line);
+  font-size:12.5px;line-height:1.7;color:var(--faint);
+}
+.howto-tip strong{color:var(--dim)}
+
+@media (max-width:820px){
+  .page{padding:40px 22px 36px}
+  h1{font-size:40px}
+  .grid{grid-template-columns:minmax(0,1fr);gap:24px}
+  .intro{max-width:none}
+  .howto-head{padding:20px 20px 14px}
+  .howto-body{padding:18px 20px 22px}
+  .tag{margin-left:0}
+}

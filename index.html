@@ -3,10 +3,137 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="0; url=blackhole/">
-<title>Wallpapers</title>
+<title>Wallpapers — TehGM</title>
+<meta name="description" content="A collection of statically hosted animated web wallpapers, built for Wallpaper Engine.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
-<body style="background:#000;color:#8b93a7;font-family:system-ui,sans-serif;padding:2em">
-<p>Redirecting to <a href="blackhole/" style="color:#8ab4d8">Black Hole</a>…</p>
+<body>
+<div class="page">
+
+  <header class="head">
+    <div>
+      <a class="back" href="https://tehgm.net">← TEHGM.NET</a>
+      <h1>Wallpapers</h1>
+    </div>
+    <p class="intro">These wallpapers are designed for use with <strong>Wallpaper Engine</strong>. Download them, or use each one as a link — just note that <strong>audio reactivity doesn't work when used as a link</strong>.</p>
+  </header>
+
+  <div class="toolbar">
+    <button type="button" class="tool-btn" data-open-howto><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.6"></circle><path d="M6.2 6.1a1.85 1.85 0 1 1 2.3 1.9c-.35.1-.5.35-.5.7v.5"></path><circle cx="8" cy="11.6" r=".85" fill="currentColor" stroke="none"></circle></svg>How to use</button>
+    <a class="tool-btn" href="https://github.com/TehGM/web-wallpapers" target="_blank" rel="noopener noreferrer"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>GitHub</a>
+  </div>
+
+  <!-- Add a wallpaper by copying one <article class="card"> block and pointing
+       it at the new folder. Drop the Audio reactive badge when the wallpaper has
+       no audio reactivity, and the Workshop button when it has no Workshop item.
+       Badge text is uppercased by CSS, as is the "·" between badges — write the
+       label in sentence case and don't add the separator to the markup. -->
+  <main class="grid">
+
+    <article class="card">
+      <div class="shot">
+        <!-- Redundant with the title and View live links, so it is kept out of
+             the tab order and the accessibility tree rather than announced a
+             third time. -->
+        <a href="blackhole/" tabindex="-1" aria-hidden="true"><img src="blackhole/preview.jpg" alt="Black Hole static preview" loading="lazy" width="800" height="800"></a>
+      </div>
+      <div class="body">
+        <div>
+          <h2 class="name"><a href="blackhole/">Black Hole</a></h2>
+          <div class="meta">
+            <span class="badge"><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M1 3.5h7M11.7 3.5H13M1 10.5h1.3M6 10.5H13"></path><circle cx="9.85" cy="3.5" r="1.7"></circle><circle cx="4.15" cy="10.5" r="1.7"></circle></svg>Configurable</span>
+          </div>
+        </div>
+        <p class="desc">Gravitational lensing bends light around the hole — its glowing disk arcs over and under, stars behind smear into rings, and a fresh nebula sky is generated for every scene.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="blackhole/"><svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M3 1.5l9 5.5-9 5.5z"></path></svg>View live</a>
+          <a class="btn btn-ghost" href="blackhole/blackhole.zip"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 1v8m0 0L3.5 5.5M7 9l3.5-3.5M1.5 12.5h11"></path></svg>ZIP</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="shot">
+        <a href="neonscape/" tabindex="-1" aria-hidden="true"><img src="neonscape/preview.jpg" alt="Neonscape static preview" loading="lazy" width="800" height="800"></a>
+      </div>
+      <div class="body">
+        <div>
+          <h2 class="name"><a href="neonscape/">Neonscape</a></h2>
+          <div class="meta">
+            <span class="badge"><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M1 3.5h7M11.7 3.5H13M1 10.5h1.3M6 10.5H13"></path><circle cx="9.85" cy="3.5" r="1.7"></circle><circle cx="4.15" cy="10.5" r="1.7"></circle></svg>Configurable</span>
+            <span class="badge audio"><svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><rect x="1" y="6" width="2" height="7" rx="1"></rect><rect x="5" y="2" width="2" height="11" rx="1"></rect><rect x="9" y="4" width="2" height="9" rx="1"></rect><rect x="12.5" y="7" width="1.5" height="6" rx=".75"></rect></svg>Audio reactive</span>
+          </div>
+        </div>
+        <p class="desc">An endless neon road running into a chrome sunset. Swap the palette, the sky, the palms, the weather — and let the whole scene pulse to your music.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="neonscape/"><svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M3 1.5l9 5.5-9 5.5z"></path></svg>View live</a>
+          <a class="btn btn-ghost" href="neonscape/neonscape.zip"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 1v8m0 0L3.5 5.5M7 9l3.5-3.5M1.5 12.5h11"></path></svg>ZIP</a>
+          <!-- Restore once the Steam Workshop item is published — set the href.
+          <a class="btn btn-ghost" href="#"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 0 0-7 6.7l3.8 1.6a2 2 0 0 1 1.1-.35l1.7-2.5v-.03a2.7 2.7 0 1 1 2.7 2.7h-.06l-2.45 1.75a2 2 0 1 1-3.95.55L1.2 10.3A7 7 0 1 0 8 1zm2.6 3.6a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z"></path></svg>Workshop</a>
+          -->
+        </div>
+      </div>
+    </article>
+
+  </main>
+
+  <footer class="foot">
+    <p class="note">
+      <strong>Note:</strong> these wallpapers were fully generated by Claude Fable and Claude Opus, as an experiment and for fun. The idea initially was merely to have a generated black hole wallpaper (to use with Wallpaper Engine). However I ended up liking the result so much so decided to share it, especially since it can be statically hosted. Later I figured I could get Claude to build several more wallpapers under the single project.<br><br>
+      I didn't touch any code in the project. Doing such cool looking things is out of my competences. I am a back-end dev, dammit!
+    </p>
+    <p class="copy">© 2026 <a href="https://tehgm.net">TehGM</a></p>
+  </footer>
+
+</div>
+
+<dialog class="howto" id="howto" aria-labelledby="howto-title">
+  <div class="howto-head">
+    <h2 class="howto-title" id="howto-title">How to use these wallpapers</h2>
+    <button type="button" class="howto-close" data-close-howto aria-label="Close"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"></path></svg></button>
+  </div>
+  <div class="howto-body">
+    <p class="howto-lead">Every wallpaper here is an ordinary web page, so there are three ways to put one on your desktop. They differ mainly in whether audio reactivity works.</p>
+
+    <ol class="steps">
+      <li class="step">
+        <div class="step-head">
+          <span class="step-n">1</span>
+          <h3 class="step-title">Use it as a link</h3>
+          <span class="tag tag-no">No audio reactivity</span>
+        </div>
+        <p>Open a wallpaper with <strong>View live</strong> and set it up however you like in its own settings panel. When you are happy with it, use the wallpaper's <strong>Export</strong> option to copy a link to that exact scene.</p>
+        <p>In Wallpaper Engine, create a new <strong>Website</strong> wallpaper and paste that link in. This is the quickest route and needs no download, but a website wallpaper gets no audio from Wallpaper Engine, so anything that reacts to music stays still.</p>
+      </li>
+
+      <li class="step">
+        <div class="step-head">
+          <span class="step-n">2</span>
+          <h3 class="step-title">Install from the Steam Workshop</h3>
+          <span class="tag tag-yes">Audio reactivity works</span>
+        </div>
+        <p>Some of these are published as Wallpaper Engine Workshop items. Subscribing gives you the native experience — full audio reactivity, and updates arrive on their own. Where a wallpaper is available there, its card links straight to it.</p>
+      </li>
+
+      <li class="step">
+        <div class="step-head">
+          <span class="step-n">3</span>
+          <h3 class="step-title">Download the ZIP</h3>
+          <span class="tag tag-yes">Audio reactivity works</span>
+        </div>
+        <p>Grab the <strong>ZIP</strong> from a card and unpack it. Each archive is a complete Wallpaper Engine project, so pointing Wallpaper Engine at the unpacked folder is all that is needed — it appears alongside your own wallpapers.</p>
+        <p>This copy lives entirely on your machine: it keeps working with no internet connection, it never re-downloads anything, and audio reactivity works exactly as it does for a Workshop item.</p>
+      </li>
+    </ol>
+
+    <p class="howto-tip"><strong>Setting up an installed copy.</strong> A wallpaper installed from the Workshop or a ZIP is loaded from disk, so there is no link for it to read settings from. Set the wallpaper up in your browser, use its <strong>Export → scene code</strong> option to copy the whole configuration as one line of text, then paste that into the installed copy under <strong>Import</strong>. It will look identical, and remembers the scene from then on.</p>
+  </div>
+</dialog>
+
+<script src="script.js" defer></script>
 </body>
 </html>
