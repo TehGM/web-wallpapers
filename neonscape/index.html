@@ -4635,6 +4635,10 @@ const RD = s => s.road.on;
 const roadHasDash = s => /dash/i.test(s.road.center)
   || s.road.edge === 'dashed' || s.road.lanes > 1;
 
+/* top of the FPS cap slider — shared with the host FPS-limit listener, which
+   writes into the same control and must not push it past its own range */
+const FPS_CAP_MAX = 240;
+
 const SCHEMA = [
   { id:'gen', title:'General', apply:'gen', open:true, rows:[
     ['rng','Palette hue shift','anim.hueShift',0,360,1],
@@ -4948,7 +4952,7 @@ const SCHEMA = [
   { id:'anim', title:'Animation · Perf', apply:'anim', rows:[
     ['chk','Play','anim.play'],
     ['rng','Master speed','anim.speed',0,3,0.01],
-    ['rng','FPS cap (0 = off)','anim.fpsCap',0,240,5],
+    ['rng','FPS cap (0 = off)','anim.fpsCap',0,FPS_CAP_MAX,5],
     ['chk','Adaptive quality','anim.adaptive'],
     ['rng','Pixel-ratio cap','anim.dprCap',0.75,2,0.05],
   ]},
@@ -5715,17 +5719,6 @@ let bandShift = 0, hueSync = 0;
 let gridGradPh = 0, gridHue = 0, audioBloom = 0;
 let fpsAcc = 0, fpsFrames = 0;
 let rafId = 0, wePaused = false;
-/* Frame limit the host asked for, 0 when none was reported (always the case
-   in a plain browser). Deliberately kept out of `state`: it is the host's
-   setting, so it must never reach the panel, a link or an autosave. */
-let weFpsCap = 0;
-/* The host's limit is a ceiling, not a replacement — an own cap that is
-   already lower stays in force, so both settings are respected. */
-function frameLimit(){
-  const own = state.anim.fpsCap;
-  if (weFpsCap <= 0) return own;
-  return own > 0 ? Math.min(own, weFpsCap) : weFpsCap;
-}
 const _v2 = new THREE.Vector2();
 
 function applyRendererSize(){
@@ -5759,8 +5752,8 @@ function tick(now){
   let dtR = Math.min((now - lastNow) / 1000, 0.1);
   lastNow = now;
 
-  /* optional fps cap (battery saver, or the host's own limit) */
-  const cap = frameLimit();
+  /* optional fps cap (battery saver) */
+  const cap = state.anim.fpsCap;
   if (cap > 0){
     capAcc += dtR;
     if (capAcc + 0.001 < 1 / cap) return;
@@ -6068,17 +6061,22 @@ function syncRunning(){
 document.addEventListener('visibilitychange', syncRunning);
 window.wallpaperPropertyListener = {
   setPaused(p){ wePaused = p; syncRunning(); },
-  /* Wallpaper Engine pushes its general settings — among them the user's
-     global FPS limit — through here. In a browser it never fires, so the
-     wallpaper behaves exactly as before.
+  /* Wallpaper Engine pushes its general settings — among them the host's
+     FPS limit — through here. In a browser it never fires, so nothing about
+     the wallpaper changes. The limit lands straight in the FPS cap control,
+     exactly as if it had been dialled in by hand: the slider moves with it
+     and the loop honours it, and moving that slider afterwards overrides it
+     like any other edit. Nothing is saved from here — the value belongs to
+     the host, not to the scene.
      https://docs.wallpaperengine.io/en/web/performance/fps.html */
   applyGeneralProperties(props){
-    // fires for other general properties too — only act when fps is present,
-    // otherwise an unrelated update would clear a limit already given
+    // fires for other general properties too — only act when fps is present
     if (!props || props.fps === undefined) return;
     const raw = props.fps;
     const v = Number(raw && typeof raw === 'object' ? raw.value : raw);
-    weFpsCap = Number.isFinite(v) && v > 0 ? v : 0;
+    if (!Number.isFinite(v) || v < 0) return;
+    state.anim.fpsCap = Math.min(Math.round(v), FPS_CAP_MAX);
+    syncTwins('anim.fpsCap', state.anim.fpsCap);   // keep the slider in step
   }
 };
 document.getElementById('presetSel').addEventListener('change', e => {
