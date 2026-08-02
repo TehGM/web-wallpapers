@@ -940,13 +940,43 @@ function persist() {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  // Frame limit the host asked for, 0 when none was reported (always the
+  // case in a plain browser). Deliberately not part of CONFIG: it is the
+  // host's setting, so it must never reach the panel, the URL or a save.
+  let hostMaxFPS = 0;
+
+  // The host's limit is a ceiling, not a replacement — an own cap that is
+  // already lower stays in force, so both settings are respected.
+  function frameLimit() {
+    const own = CONFIG.quality.maxFPS;
+    if (hostMaxFPS <= 0) return own;
+    return own > 0 ? Math.min(own, hostMaxFPS) : hostMaxFPS;
+  }
+
   function frame(t) {
     rafId = requestAnimationFrame(frame);
-    const fps = CONFIG.quality.maxFPS;
+    const fps = frameLimit();
     if (fps > 0 && t - lastFrame < 1000 / fps - 1.5) return;
     lastFrame = t;
     draw();
   }
+
+  /* Wallpaper Engine pushes its general settings — among them the user's
+     global FPS limit — through this listener. Nothing else ever calls it:
+     in a browser the global is simply an object no one reads, so the
+     wallpaper behaves exactly as before. Merged onto whatever may already
+     be registered rather than replacing it.
+     https://docs.wallpaperengine.io/en/web/performance/fps.html */
+  const wpl = window.wallpaperPropertyListener =
+              window.wallpaperPropertyListener || {};
+  wpl.applyGeneralProperties = function (props) {
+    // fires for other general properties too — only act when fps is present,
+    // otherwise an unrelated update would clear a limit already given
+    if (!props || props.fps === undefined) return;
+    const raw = props.fps;
+    const v = Number(raw && typeof raw === "object" ? raw.value : raw);
+    hostMaxFPS = Number.isFinite(v) && v > 0 ? v : 0;
+  };
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {

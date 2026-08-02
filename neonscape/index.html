@@ -5715,6 +5715,17 @@ let bandShift = 0, hueSync = 0;
 let gridGradPh = 0, gridHue = 0, audioBloom = 0;
 let fpsAcc = 0, fpsFrames = 0;
 let rafId = 0, wePaused = false;
+/* Frame limit the host asked for, 0 when none was reported (always the case
+   in a plain browser). Deliberately kept out of `state`: it is the host's
+   setting, so it must never reach the panel, a link or an autosave. */
+let weFpsCap = 0;
+/* The host's limit is a ceiling, not a replacement — an own cap that is
+   already lower stays in force, so both settings are respected. */
+function frameLimit(){
+  const own = state.anim.fpsCap;
+  if (weFpsCap <= 0) return own;
+  return own > 0 ? Math.min(own, weFpsCap) : weFpsCap;
+}
 const _v2 = new THREE.Vector2();
 
 function applyRendererSize(){
@@ -5748,8 +5759,8 @@ function tick(now){
   let dtR = Math.min((now - lastNow) / 1000, 0.1);
   lastNow = now;
 
-  /* optional fps cap (battery saver) */
-  const cap = state.anim.fpsCap;
+  /* optional fps cap (battery saver, or the host's own limit) */
+  const cap = frameLimit();
   if (cap > 0){
     capAcc += dtR;
     if (capAcc + 0.001 < 1 / cap) return;
@@ -6056,7 +6067,19 @@ function syncRunning(){
 }
 document.addEventListener('visibilitychange', syncRunning);
 window.wallpaperPropertyListener = {
-  setPaused(p){ wePaused = p; syncRunning(); }
+  setPaused(p){ wePaused = p; syncRunning(); },
+  /* Wallpaper Engine pushes its general settings — among them the user's
+     global FPS limit — through here. In a browser it never fires, so the
+     wallpaper behaves exactly as before.
+     https://docs.wallpaperengine.io/en/web/performance/fps.html */
+  applyGeneralProperties(props){
+    // fires for other general properties too — only act when fps is present,
+    // otherwise an unrelated update would clear a limit already given
+    if (!props || props.fps === undefined) return;
+    const raw = props.fps;
+    const v = Number(raw && typeof raw === 'object' ? raw.value : raw);
+    weFpsCap = Number.isFinite(v) && v > 0 ? v : 0;
+  }
 };
 document.getElementById('presetSel').addEventListener('change', e => {
   const i = e.target.value;
