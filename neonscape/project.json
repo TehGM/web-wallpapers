@@ -4,6 +4,7 @@
 	"file" : "index.html",
 	"general" :
 	{
+		"properties" : {},
 		"supportsaudioprocessing" : true
 	},
 	"preview" : "preview.jpg",
