@@ -1357,7 +1357,9 @@ function persist() {
   addHeader("Rendering");
   addRange("Render scale", ["quality", "renderScale"], 0.25, 1, 0.05,
     debounce(() => BH.resize(), 250));
-  const FPS_MAX = 60;
+  // Top of the Max FPS slider, wide enough that a high-refresh host limit
+  // (144, 165, 240) lands on the control exactly rather than being clipped.
+  const FPS_MAX = 240;
   addRange("Max FPS (0 = uncapped)", ["quality", "maxFPS"], 0, FPS_MAX, 5, noop);
   const stepsInp = addRange("March steps (reloads)", ["quality", "marchSteps"], 16, 96, 4, noop);
   stepsInp.addEventListener("change", () => { persist(); location.reload(); });
