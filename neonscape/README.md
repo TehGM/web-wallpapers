@@ -52,13 +52,16 @@ both are present `config=` wins — it pins an exact scene, while a preset is a
 name whose definition may be retuned in a later release.
 
 Precedence on load: `?config=` → `?preset=` → the autosaved local scene →
-defaults. A shared link always looks the way the sender saw it.
+defaults. A shared link always looks the way the sender saw it. With nothing
+saved and nothing asked for, the opening scene — and **Reset** — is *Classic
+Outrun*.
 
 ## Audio reactivity
 
-Enable it in the **Audio reactive** section, then map bass / mids / treble to
-whatever should move: grid pulse, sun, bloom, stars, road, horizon, camera,
-hero object, neon text, palms, beams. Sources:
+Map bass / mids / treble to whatever should move: grid pulse, sun, bloom,
+stars, road, horizon, camera, hero object, neon text, palms, beams. Every
+preset arrives with reactivity on and mapped to what that scene actually
+shows, so the choice of bands is part of the preset. Sources:
 
 - **Wallpaper Engine** — the system audio feed is automatic (the `auto`
   source; requires the wallpaper to be *installed*, WE does not feed audio to
@@ -66,6 +69,10 @@ hero object, neon text, palms, beams. Sources:
 - **System audio** in a browser — screen share with the "share audio" box
   ticked.
 - **Microphone**, or a local **audio file** with built-in playback.
+
+In a browser, `auto` falls back to the microphone but never on its own: it
+waits for you to touch an audio control or load a preset, so simply opening
+the page never raises a permission prompt.
 
 ## Performance
 

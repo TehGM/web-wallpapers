@@ -535,7 +535,21 @@ const PRESETS = [
       s.road.centerColor = '#ffd319'; s.road.edge = 'solid'; s.road.lanes = 2;
       s.road.gloss = 0.7; s.road.puddle = 0.35;
       s.grid.reflect = 0.3; s.mtn.layers = 2; s.stars.density = 0.8;
-      s.post.scan = 0.4; s.post.chroma = 0.35; s.cam.sway = 0.4; } },
+      s.post.scan = 0.4; s.post.chroma = 0.35; s.cam.sway = 0.4;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* the opening scene, so the audio mapping is broad but restrained:
+         the floor, the sun's halo and the dashed line carry the beat and
+         the hills only breathe under it */
+      s.audio.on = true;
+      s.audio.mGrid       = { band:'bass',   sens:0.9,  boost:0.5 };
+      s.audio.mTerrain    = { band:'bass',   sens:0.45, boost:0.5 };
+      s.audio.mSun        = { band:'bass',   sens:0.5,  boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.6 };
+      s.audio.mMtn        = { band:'bass',   sens:0.45, boost:1 };
+      s.audio.mRoad       = { band:'bass',   sens:0.7,  boost:0.6 };
+      s.audio.mBloom      = { band:'bass',   sens:0.7,  boost:0.4 };
+      s.audio.mStars      = { band:'treble', sens:0.7 };
+      s.audio.mScan       = { band:'treble', sens:0.5 }; } },
   { id:'miami-palms', name:'Miami Palms', patch:s => { paintPalette(s, PALETTES[0]);
       s.sun.size = 72; s.sun.y = 24; s.sun.bands = 13;
       // the shoreline: sun glinting off open water behind haloed palms
@@ -547,7 +561,20 @@ const PRESETS = [
       s.grid.reflect = 0.6;
       s.clouds.on = true; s.clouds.opacity = 0.4;
       s.stars.density = 0.5; s.post.scan = 0.5; s.post.vhs = 0.2;
-      s.cam.sway = 0.5; } },
+      s.cam.sway = 0.5;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* the tide comes in with the music and the palm halos bloom on the
+         beat; terrain stays off so the floor keeps meeting the waterline */
+      s.audio.on = true;
+      s.audio.mMtn        = { band:'bass',   sens:0.7,  boost:1 };
+      s.audio.mPalmHalo   = { band:'bass',   sens:0.9,  boost:0.7 };
+      s.audio.mPalms      = { band:'off',    sens:0.5,  boost:1 };
+      s.audio.mTerrain    = { band:'off',    sens:0.6,  boost:1 };
+      s.audio.mGrid       = { band:'bass',   sens:0.6,  boost:0.4 };
+      s.audio.mSun        = { band:'bass',   sens:0.4,  boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.5 };
+      s.audio.mBloom      = { band:'bass',   sens:0.6,  boost:0.35 };
+      s.audio.mStars      = { band:'mid',    sens:0.5 }; } },
   { id:'vapor-dream', name:'Vapor Dream', patch:s => { paintPalette(s, PALETTES[3]);
       s.sun.mode = 'planet'; s.sun.size = 60; s.sun.y = 38;
       s.mtn.mode = 'off'; s.grid.amp = 0; s.grid.speed = 0.45; s.grid.reflect = 0.5;
@@ -558,7 +585,20 @@ const PRESETS = [
       s.fx.text = true; s.fx.textStr = 'V A P O R'; s.fx.textStyle = 'chrome';
       s.stars.density = 0.85; s.clouds.on = true; s.clouds.opacity = 0.45;
       s.post.chroma = 0.3; s.cam.sway = 0.7; s.cam.swaySpd = 0.35;
-      s.cam.dolly = 0.35; s.cam.dollySpd = 0.3; } },
+      s.cam.dolly = 0.35; s.cam.dollySpd = 0.3;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* the chrome lettering is the instrument here — mids swell and light
+         it, treble sparkles the star field, and the planet barely moves */
+      s.audio.on = true;
+      s.audio.mText       = { band:'mid',    sens:0.6 };
+      s.audio.mTextGlow   = { band:'mid',    sens:0.7 };
+      s.audio.mStars      = { band:'treble', sens:0.9 };
+      s.audio.mGrid       = { band:'bass',   sens:0.7,  boost:0.5 };
+      s.audio.mTerrain    = { band:'off',    sens:0.6,  boost:1 };
+      s.audio.mSun        = { band:'bass',   sens:0.3,  boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.4 };
+      s.audio.mBloom      = { band:'bass',   sens:0.6,  boost:0.4 };
+      s.audio.mScan       = { band:'treble', sens:0.35 }; } },
   { id:'neon-noir', name:'Neon Noir', patch:s => { paintPalette(s, PALETTES[4]);
       s.sun.size = 56; s.sun.y = 22; s.sun.bands = 12; s.sun.glow = 0.8;
       // rain-slick street into a lit skyline, city mirrored in the floor
@@ -573,7 +613,22 @@ const PRESETS = [
       s.clouds.on = true; s.clouds.opacity = 0.5; s.clouds.haze = 0.7;
       s.stars.density = 0.35; s.cam.height = 4.2;
       s.post.vig = 0.65; s.post.grain = 0.3; s.post.bloomStr = 1.05;
-      s.post.scan = 0.2; } },
+      s.post.scan = 0.2;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* lit windows flare on the mids and the wet tarmac sheens on the
+         bass. Bloom is deliberately weak: the scene already sits at 1.05,
+         and buildings that grow would break a street-level shot          */
+      s.audio.on = true;
+      s.audio.mMtn        = { band:'mid',    sens:0.8,  boost:1 };
+      s.audio.mCityH      = { band:'off',    sens:0.5,  boost:1 };
+      s.audio.mRoadGloss  = { band:'bass',   sens:0.5,  boost:0.5 };
+      s.audio.mRoad       = { band:'bass',   sens:0.6,  boost:0.5 };
+      s.audio.mGrid       = { band:'bass',   sens:0.5,  boost:0.35 };
+      s.audio.mTerrain    = { band:'off',    sens:0.6,  boost:1 };
+      s.audio.mSun        = { band:'bass',   sens:0.25, boost:1 };
+      s.audio.mBloom      = { band:'bass',   sens:0.35, boost:0.25 };
+      s.audio.mStars      = { band:'off',    sens:0.6 };
+      s.audio.mScan       = { band:'treble', sens:0.3 }; } },
   { id:'white-line', name:'White Line', patch:s => { paintPalette(s, PALETTES[2]);
       s.sun.c1 = '#ffd319'; s.sun.c2 = '#ff8c00'; s.sun.c3 = '#ff2975';
       s.sun.size = 55; s.sun.y = 22; s.sun.glow = 0.5;
@@ -587,7 +642,20 @@ const PRESETS = [
       s.grid.reflect = 0.15; s.grid.speed = 1.1;
       s.mtn.mode = 'off'; s.stars.density = 0.95; s.stars.twinkle = 1.0;
       s.post.chroma = 0.45; s.post.scan = 0.45; s.post.grain = 0.3;
-      s.post.vig = 0.55; } },
+      s.post.vig = 0.55;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* almost nothing on screen, so the two things that are get worked
+         hard: hats flash the white line and the stars, bass heaves the
+         hills the road runs over                                        */
+      s.audio.on = true;
+      s.audio.mRoad       = { band:'treble', sens:0.9,  boost:0.8 };
+      s.audio.mStars      = { band:'treble', sens:1.2 };
+      s.audio.mScan       = { band:'treble', sens:0.7 };
+      s.audio.mTerrain    = { band:'bass',   sens:0.7,  boost:0.7 };
+      s.audio.mGrid       = { band:'bass',   sens:0.8,  boost:0.6 };
+      s.audio.mSun        = { band:'bass',   sens:0.45, boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.7 };
+      s.audio.mBloom      = { band:'bass',   sens:0.45, boost:0.3 }; } },
   { id:'acid-moon', name:'Acid Moon', patch:s => { paintPalette(s, PALETTES[6]);
       // the psychedelic one: wire moon over hue-cycling lines, a slow
       // orbiting camera and a torus hanging in the sky
@@ -600,7 +668,23 @@ const PRESETS = [
       s.fx.heroSize = 1.2; s.fx.heroY = 30; s.fx.heroZ = -140;
       s.stars.density = 0.9; s.stars.drift = 0.45; s.stars.twinkle = 1.1;
       s.cam.orbit = 0.2; s.cam.orbitSpd = 0.25;
-      s.post.chroma = 0.3; s.post.grain = 0.22; } },
+      s.post.chroma = 0.3; s.post.grain = 0.22;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* the loud one. Moon and torus both pump on the bass, and this is
+         the only preset that takes the FOV punch — a couple of degrees,
+         enough to feel the beat in the camera without inducing seasickness */
+      s.audio.on = true;
+      s.audio.mSun        = { band:'bass',   sens:0.8,  boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.8 };
+      s.audio.mHero       = { band:'bass',   sens:0.8 };
+      s.audio.mHeroGlow   = { band:'treble', sens:0.7 };
+      s.audio.mGrid       = { band:'bass',   sens:1.0,  boost:0.7 };
+      s.audio.mTerrain    = { band:'mid',    sens:0.7,  boost:0.6 };
+      s.audio.mMtn        = { band:'bass',   sens:0.6,  boost:1 };
+      s.audio.mStars      = { band:'treble', sens:1.0 };
+      s.audio.mScan       = { band:'treble', sens:0.6 };
+      s.audio.mBloom      = { band:'mid',    sens:0.8,  boost:0.5 };
+      s.audio.mFov        = { band:'bass',   sens:0.35 }; } },
   { id:'storm-circuit', name:'Storm Circuit', patch:s => { paintPalette(s, PALETTES[5]);
       s.fx.weather = 'storm'; s.fx.rainAmt = 0.85; s.fx.beams = true;
       s.clouds.on = true; s.clouds.opacity = 0.6; s.clouds.speed = 0.6;
@@ -610,8 +694,23 @@ const PRESETS = [
       s.road.centerColor = '#2de2e6'; s.road.edge = 'rails';
       s.road.edgeColor = '#ff2255'; s.road.lanes = 1; s.road.gloss = 0.85;
       s.road.markW = 0.22; s.road.puddle = 0.7;   // storm — standing water
-      s.audio.mRoad = { band:'bass', sens:0.6, boost:1 };
-      s.post.vhs = 0.35; s.post.scan = 0.3; s.stars.density = 0.3; } },
+      s.post.vhs = 0.35; s.post.scan = 0.3; s.stars.density = 0.3;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* built around the beams and the rails: both hit hard on the bass,
+         the rails widening as well as brightening. Stars stay out of it —
+         the sky is under storm cloud                                    */
+      s.audio.on = true;
+      s.audio.mBeam       = { band:'bass',   sens:1.0,  boost:1.2 };
+      s.audio.mRoad       = { band:'bass',   sens:0.8,  boost:0.8 };
+      s.audio.mRoadMark   = { band:'bass',   sens:0.35, boost:0.5 };
+      s.audio.mRoadGloss  = { band:'bass',   sens:0.4,  boost:0.5 };
+      s.audio.mGrid       = { band:'bass',   sens:1.0,  boost:0.7 };
+      s.audio.mTerrain    = { band:'bass',   sens:0.5,  boost:0.6 };
+      s.audio.mMtn        = { band:'bass',   sens:0.7,  boost:1 };
+      s.audio.mSun        = { band:'bass',   sens:0.5,  boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.6 };
+      s.audio.mBloom      = { band:'bass',   sens:0.7,  boost:0.5 };
+      s.audio.mStars      = { band:'off',    sens:0.6 }; } },
   { id:'eerie-whispers', name:"TehGM's Eerie Whispers", patch:s => {
       /* contributed by TehGM — a green-lit rain scene built to show off
          the audio pipeline: most bands are mapped, bloom sits near zero
@@ -670,8 +769,23 @@ const PRESETS = [
       s.anim.speed = 1.36; s.anim.hue = 2.53; s.anim.hueShift = 116; } },
 ];
 
+/* The scene shown when nothing else asks for one — a first visit with no
+   ?config= and no ?preset=, and the Reset button. DEFAULTS on its own is a
+   deliberately plain base for presets to patch (sun, flat floor, stars and
+   little else), which is a poor introduction to what this thing does, so the
+   opening scene is Classic Outrun laid over it. Presets still patch raw
+   DEFAULTS and a saved scene still merges onto raw DEFAULTS, so this changes
+   only what someone sees before they have chosen anything.                */
+const DEFAULT_PRESET = 'classic-outrun';
+function defaultState(){
+  const s = deepClone(DEFAULTS);
+  const p = PRESETS.find(x => x.id === DEFAULT_PRESET);
+  if (p) p.patch(s);
+  return s;
+}
+
 /* live state (mutated in place so bound UI + appliers stay simple) */
-let state = deepClone(DEFAULTS);
+let state = defaultState();
 
 /* Loading a preset or randomizing replaces the scene but keeps the machine
    prefs — these keys, everything under "Animation · Perf". Deliberately NOT
@@ -3496,6 +3610,9 @@ const audioEng = {
   micStream: null, sysStream: null, audioEl: null, fileUrl: null,
   weFresh: false,
 };
+/* Flipped once boot has painted. Until then the 'auto' source will not fall
+   back to the microphone — see applyAudio.                                */
+let audioArmed = false;
 
 /* Wallpaper Engine: 128 floats = 64 left + 64 right, low → high */
 if (isWE){
@@ -4272,8 +4389,16 @@ function applyAudio(){
     updateVis();                       // hides the playback player row
   }
   if (!a.on){ audioTeardown(); return; }
-  const src = a.src === 'auto' ? (isWE ? 'we' : 'mic') : a.src;
-  if (src === 'mic') audioUseMic();
+  const auto = a.src === 'auto';
+  const src = auto ? (isWE ? 'we' : 'mic') : a.src;
+  /* 'auto' means the host's own feed where there is one and the microphone
+     only as a fallback — but that fallback must not fire unasked. Every
+     preset now ships with audio on, so an unguarded auto would throw a
+     microphone permission prompt at anyone who merely opens the page in a
+     browser. A wallpaper host has no prompt and nothing to wait for, so only
+     the browser path is held: the mic connects the moment the visitor
+     touches an audio control or loads a preset themselves.               */
+  if (src === 'mic' && (audioArmed || !auto)) audioUseMic();
   else if (src === 'system' && !audioEng.sysStream) audioUseSystem();
   else if (src === 'file' && !(audioEng.audioEl && audioEng.audioEl.src))
     toast('Pick a track with “Load audio file”');
@@ -5456,7 +5581,7 @@ document.getElementById('btnColAll').addEventListener('click', () =>
   });
 }
 document.getElementById('btnReset').addEventListener('click', () => {
-  loadState(deepClone(DEFAULTS)); toast('Defaults restored');
+  loadState(defaultState()); toast('Defaults restored');
 });
 /* ── scene code box ────────────────────────────────────────────────────
    One overlay serves both directions: export fills it and tries the
@@ -5971,6 +6096,7 @@ document.getElementById('presetSel').addEventListener('change', e => {
   if (h.ui === '0' || (isWE && h.ui === undefined)) toggleUI(false);
   applyAll();
   refreshUI();
+  audioArmed = true;                // boot is past — 'auto' may reach the mic
   if (badPreset) toast(`Unknown preset “${badPreset}” — loaded defaults`);
   applyRendererSize();
   renderFrame();                    // paint immediately, then pre-warm
