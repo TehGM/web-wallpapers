@@ -486,8 +486,8 @@ const DEFAULTS = {
            mSeaLevel:{band:'off',sens:0.4,boost:1},
            mFov:{band:'off',sens:0.5},
            mBeam:{band:'bass',sens:0.8,boost:1} },
-  anim:  { play:true, speed:1.0, fpsCap:60, adaptive:true, dprCap:1.00,
-           hue:0, hueShift:0 }
+  anim:  { play:true, speed:1.0, fpsCap:60, fpsOverride:false,
+           adaptive:true, dprCap:1.00, hue:0, hueShift:0 }
 };
 
 /* Hand-tuned synthwave palettes.
@@ -795,7 +795,7 @@ let state = defaultState();
    rewrites it every frame, so preserving it pastes whatever phase the cycle
    happened to be at onto the next scene. A preset that wants either still
    sets it in its own patch, which runs afterwards.                       */
-const PERF_KEYS = ['play', 'speed', 'fpsCap', 'adaptive', 'dprCap'];
+const PERF_KEYS = ['play', 'speed', 'fpsCap', 'fpsOverride', 'adaptive', 'dprCap'];
 function keepPerfPrefs(dst, src){
   for (const k of PERF_KEYS) dst.anim[k] = src.anim[k];
   return dst;
@@ -4404,7 +4404,9 @@ function applyAudio(){
     toast('Pick a track with “Load audio file”');
   // 'we': the listener registered at boot feeds us automatically
 }
-function applyAnim(){ applyRendererSize(); }
+/* also the switch that decides whether the host owns the FPS cap: turning it
+   off hands the cap straight back to the host's limit */
+function applyAnim(){ applyHostFps(); applyRendererSize(); }
 
 const appliers = { sky: applySky, sun: applySun, grid: applyGrid,
   road: applyRoad, mtn: applyMtn,
@@ -4606,6 +4608,7 @@ const TIPS = {
   'anim.play':'Master play / pause (Space).',
   'anim.speed':'Global time multiplier for every animation.',
   'anim.fpsCap':'Limit the frame rate to save power. 0 = uncapped.',
+  'anim.fpsOverride':'Ignore the FPS limit Wallpaper Engine sets for the whole desktop and use the cap below instead. Only appears when a host reports one.',
   'anim.adaptive':'Automatically lowers resolution when the GPU falls behind.',
   'anim.dprCap':'Maximum render resolution relative to your display.',
 };
@@ -4638,6 +4641,27 @@ const roadHasDash = s => /dash/i.test(s.road.center)
 /* top of the FPS cap slider — shared with the host FPS-limit listener, which
    writes into the same control and must not push it past its own range */
 const FPS_CAP_MAX = 240;
+
+/* A wallpaper host may cap the frame rate of everything on the desktop.
+   -1 until one reports its limit — a plain browser never does, so nothing
+   below it is ever visible there. */
+let hostFps = -1;
+
+/** Re-derives who owns the frame limit. With no host there is nothing to
+    override, so the switch hides and the cap is the user's own; with a host
+    and the switch off, the host's limit is copied into the cap, which then
+    locks. Returns true when that copy moved the value, so the caller can
+    save it — the switch and the resulting cap are both remembered. */
+function applyHostFps(){
+  const locked = hostFps >= 0 && !state.anim.fpsOverride;
+  const changed = locked && state.anim.fpsCap !== hostFps;
+  if (changed){
+    state.anim.fpsCap = hostFps;
+    syncTwins('anim.fpsCap', hostFps);
+  }
+  updateVis();
+  return changed;
+}
 
 const SCHEMA = [
   { id:'gen', title:'General', apply:'gen', open:true, rows:[
@@ -4952,7 +4976,10 @@ const SCHEMA = [
   { id:'anim', title:'Animation · Perf', apply:'anim', rows:[
     ['chk','Play','anim.play'],
     ['rng','Master speed','anim.speed',0,3,0.01],
-    ['rng','FPS cap (0 = off)','anim.fpsCap',0,FPS_CAP_MAX,5],
+    ['chk','Override Wallpaper Engine FPS','anim.fpsOverride',
+      { show: () => hostFps >= 0 }],
+    ['rng','FPS cap (0 = off)','anim.fpsCap',0,FPS_CAP_MAX,5,
+      { dis: s => hostFps >= 0 && !s.anim.fpsOverride }],
     ['chk','Adaptive quality','anim.adaptive'],
     ['rng','Pixel-ratio cap','anim.dprCap',0.75,2,0.05],
   ]},
@@ -5499,6 +5526,9 @@ function loadState(obj){
   state = deepMerge(deepClone(DEFAULTS), obj);
   applyAll();
   refreshUI();
+  // an imported scene brings its own override switch — the host's limit
+  // takes the cap straight back if it arrived turned off
+  applyHostFps();
   autosave();
 }
 function doRandomize(){
@@ -6061,13 +6091,11 @@ function syncRunning(){
 document.addEventListener('visibilitychange', syncRunning);
 window.wallpaperPropertyListener = {
   setPaused(p){ wePaused = p; syncRunning(); },
-  /* Wallpaper Engine pushes its general settings — among them the host's
-     FPS limit — through here. In a browser it never fires, so nothing about
-     the wallpaper changes. The limit lands straight in the FPS cap control,
-     exactly as if it had been dialled in by hand: the slider moves with it
-     and the loop honours it, and moving that slider afterwards overrides it
-     like any other edit. Nothing is saved from here — the value belongs to
-     the host, not to the scene.
+  /* Wallpaper Engine pushes its general settings — among them the frame
+     limit it applies to the whole desktop — through here. In a browser it
+     never fires, so the override switch stays hidden and nothing about the
+     wallpaper changes. Arriving at all is what reveals the switch; while
+     that switch is off the limit owns the FPS cap control.
      https://docs.wallpaperengine.io/en/web/performance/fps.html */
   applyGeneralProperties(props){
     // fires for other general properties too — only act when fps is present
@@ -6075,8 +6103,8 @@ window.wallpaperPropertyListener = {
     const raw = props.fps;
     const v = Number(raw && typeof raw === 'object' ? raw.value : raw);
     if (!Number.isFinite(v) || v < 0) return;
-    state.anim.fpsCap = Math.min(Math.round(v), FPS_CAP_MAX);
-    syncTwins('anim.fpsCap', state.anim.fpsCap);   // keep the slider in step
+    hostFps = Math.min(Math.round(v), FPS_CAP_MAX);
+    if (applyHostFps()) autosave();
   }
 };
 document.getElementById('presetSel').addEventListener('change', e => {
@@ -6117,6 +6145,9 @@ document.getElementById('presetSel').addEventListener('change', e => {
   if (h.ui === '0' || (isWE && h.ui === undefined)) toggleUI(false);
   applyAll();
   refreshUI();
+  /* a host limit can arrive while boot is still awaiting its config, and the
+     load above replaces `state` wholesale — so re-derive the lock here */
+  applyHostFps();
   audioArmed = true;                // boot is past — 'auto' may reach the mic
   if (badPreset) toast(`Unknown preset “${badPreset}” — loaded defaults`);
   applyRendererSize();

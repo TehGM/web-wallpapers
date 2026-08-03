@@ -38,7 +38,8 @@ the defaults becomes a query parameter, so the URL is always shareable. A link
 takes precedence over the remembered local scene, so a link someone shares
 always looks the way they saw it. Useful keys: `seed`, `ui=0` (start with hidden UI),
 `cam=0` (lock the camera → fastest path), `yaw`/`pitch`/`dist`, `diskColor`
-(`seed` or `rrggbb`), `nebulae`, `ambient`, `stars`, `motion`, `scale`, `fps`.
+(`seed` or `rrggbb`), `nebulae`, `ambient`, `stars`, `motion`, `scale`, `fps`,
+`fpsOvr=1` (keep `fps` even under a host's own FPS limit).
 Example:
 
 ```
@@ -64,6 +65,7 @@ Everything lives in the `CONFIG` object at the top of `index.html`:
 | `background.motion` | Subtle nebula drift. `0` makes the background fully static, which also unlocks the fastest static-camera path. |
 | `quality.renderScale` | Internal resolution fraction (default `0.5`); the glow aesthetic upscales cleanly. |
 | `quality.maxFPS` | Frame cap (default `30`, `0` = uncapped). |
+| `quality.fpsOverride` | `false` (default): when a host such as Wallpaper Engine reports its own FPS limit, that limit takes over `maxFPS` and the slider locks. `true`: keep `maxFPS` and ignore the host. The switch only appears once a host has reported a limit — in a browser it is hidden and the slider is always yours. |
 | `quality.marchSteps` | Ray-march steps for the lensing (read once at load). |
 
 Console API:
