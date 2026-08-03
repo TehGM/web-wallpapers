@@ -1371,7 +1371,7 @@ function persist() {
      and that cap owns the slider below unless this switch is on — so the
      host's setting is respected by default, and a wallpaper that should run
      faster than the rest of the desktop is one click away. */
-  const ovrInp = addCheck("Override Wallpaper Engine FPS",
+  const ovrInp = addCheck("Override WE FPS Limit",
                           ["quality", "fpsOverride"], syncFpsLock);
   const fpsInp = addRange("Max FPS (0 = uncapped)", ["quality", "maxFPS"], 0, FPS_MAX, 5, noop);
   const stepsInp = addRange("March steps (reloads)", ["quality", "marchSteps"], 16, 96, 4, noop);

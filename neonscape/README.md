@@ -84,7 +84,7 @@ a disabled control costs nothing.
 
 Inside a host that limits frame rate for the whole desktop — Wallpaper Engine
 does — that limit takes over the fps cap and locks the slider, so the host's
-setting is respected by default. **Override Wallpaper Engine FPS**, right above
-the slider, hands the cap back to you for this wallpaper alone; it and the cap
-are both remembered. In a browser no limit is ever reported, so the switch stays
+setting is respected by default. **Override WE FPS Limit**, right above the
+slider, hands the cap back to you for this wallpaper alone; it and the cap are
+both remembered. In a browser no limit is ever reported, so the switch stays
 hidden and the slider is always yours.

@@ -4976,7 +4976,7 @@ const SCHEMA = [
   { id:'anim', title:'Animation · Perf', apply:'anim', rows:[
     ['chk','Play','anim.play'],
     ['rng','Master speed','anim.speed',0,3,0.01],
-    ['chk','Override Wallpaper Engine FPS','anim.fpsOverride',
+    ['chk','Override WE FPS Limit','anim.fpsOverride',
       { show: () => hostFps >= 0 }],
     ['rng','FPS cap (0 = off)','anim.fpsCap',0,FPS_CAP_MAX,5,
       { dis: s => hostFps >= 0 && !s.anim.fpsOverride }],
