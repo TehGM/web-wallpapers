@@ -1,8 +1,8 @@
 # Neonscape
 
 A synthwave / retrowave scene builder and animated wallpaper, rendered with
-Three.js. Everything on screen — sun, grid floor, road, horizon, palms, hero
-object, neon text, weather, post FX — is editable live from the built-in panel,
+Three.js. Everything on screen — sun, grid floor, road, the car on it, horizon,
+palms, neon text, weather, post FX — is editable live from the built-in panel,
 and every scene can be randomized, saved, and shared as a link. Almost every
 element can also be driven by audio (bass, mids or treble).
 
@@ -16,7 +16,8 @@ disk.
 
 The panel opens on the left. Its toolbar:
 
-- 📼 **Load preset** — curated scenes, including *TehGM's Eerie Whispers*.
+- 📼 **Load preset** — curated scenes, including *Countach Cruise* and
+  *TehGM's Eerie Whispers*.
 - ⚂ **Randomize** — a whole new scene; the glued ▾ picks a mood that biases
   what the randomizer builds. Hotkey **R**.
 - 🎨 **Palette** — reroll only the colors, keep the scene.
@@ -24,10 +25,36 @@ The panel opens on the left. Its toolbar:
 - **Reset** — back to defaults. **Hide UI** (**H**) and **⛶ Full** (**F**).
 
 Below that, collapsible sections cover every part of the scene: General, Sky,
-Sun · Moon, Grid floor, Road, Horizon, Stars, Clouds · Haze, Extras (palms,
-hero object, neon text, light beams, weather), Camera, Post FX, Audio
-reactive, and Animation · Perf. The footer shows the fps, and the scene seed —
-click it to type a seed and regenerate.
+Sun · Moon, Grid floor, Road, Car, Horizon, Stars, Clouds · Haze, Extras
+(palms, neon text, light beams, weather), Camera, Post FX, Audio reactive, and
+Animation · Perf. The footer shows the fps, and the scene seed — click it to
+type a seed and regenerate.
+
+## The car
+
+**Car** puts a Lamborghini Countach on the tarmac. It is a real low-poly mesh,
+not a sprite, so it holds up as an object standing on the road while the camera
+sways, dollies and orbits: it follows the road's bend, keeps its lane as the
+road is widened, casts a contact shadow and is mirrored in the wet surface
+along with everything else the Scene reflection slider covers.
+
+Which way it faces follows the world rather than a setting. The floor scrolling
+toward you means you are moving forward, so the car ahead is driving away;
+reverse the scroll and it turns into oncoming traffic with its four pop-up
+headlights raised. Wheels, speed streaks and tyre marks all run at the road's
+speed, so a stopped road parks it.
+
+Solid bodywork, a glowing wireframe or both at once, with body and accent
+colours, lane, distance, size, lights, underglow, speed streaks, tyre marks and
+the rear wing. The underglow is strip lighting: it spills onto the road along
+the body's own outline rather than pooling in a circle, and it lights the
+ground only. The speed streaks come off the car itself and stream past it; the
+tyre marks are rubber laid down behind the rear wheels, wandering and patchy
+and fading out with distance. Between them they are what makes it read as
+driving rather than parked. Switched off the car costs nothing at all —
+no geometry is built until the first time it is turned on, and turning it off
+returns the scene to exactly the draw calls it had without it. The tyre marks
+are the same: at 0 they are compiled out of the shader.
 
 Hotkeys: **H** hide/show UI · **R** randomize · **F** fullscreen · **Space**
 play/pause · **S** copy a wallpaper link.
@@ -59,7 +86,8 @@ Outrun*.
 ## Audio reactivity
 
 Map bass / mids / treble to whatever should move: grid pulse, sun, bloom,
-stars, road, horizon, camera, hero object, neon text, palms, beams. Every
+stars, road, horizon, camera, the car's lights and speed streaks,
+neon text, palms, beams. Every
 preset arrives with reactivity on and mapped to what that scene actually
 shows, so the choice of bands is part of the preset. Sources:
 

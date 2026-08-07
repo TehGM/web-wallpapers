@@ -436,6 +436,10 @@ const DEFAULTS = {
            center:'dashed', centerColor:'#ffd319',
            edge:'solid',    edgeColor:'#f2f6ff',
            lanes:2, markW:0.14, dashLen:16, dashDuty:0.42, glow:1.0 },
+  car:   { on:false, model:'lambo', style:'both',
+           body:'#2a0d46', neon:'#00e5ff',
+           z:-30, lane:0.42, size:1.0, wing:true,
+           lights:1.0, glow:0.35, shadow:0.7, motion:0.6, skid:0.5 },
   mtn:   { mode:'mountains',        // off · mountains · city · sea
            layers:2, height:30, rough:1.0, seed:1234,
            fill:'#0e0426', edge:'#ff2d95', edgeGlow:1.0,
@@ -448,9 +452,6 @@ const DEFAULTS = {
            size:1.0, near:0 },
   fx:    { palms:false, palmCount:4, palmColor:'#0b0318', palmSway:0.3,
            palmSeed:1234, palmHalo:0, palmGlowColor:'#ff2d95',
-           hero:'none', heroColor:'#00e5ff', heroSpin:0.4, heroSize:1.0,
-           heroX:0, heroY:7.5, heroZ:-70, heroAngle:0,
-           heroBloomOn:false, heroBloom:1.0,
            text:false, textStr:'OUTRUN', textStyle:'chrome', textColor:'#ff2d95',
            textSize:1.0, textX:0, textY:46,
            textBloomOn:false, textBloom:1.0,
@@ -469,7 +470,8 @@ const DEFAULTS = {
            mStars:{band:'mid',sens:0.6},
            mScan:{band:'treble',sens:0.4},
            mTerrain:{band:'bass',sens:0.6,boost:1},
-           mHero:{band:'bass',sens:0.5},  mHeroGlow:{band:'bass',sens:0.5},
+           mCarGlow:{band:'bass',sens:0.6},
+           mCarMotion:{band:'bass',sens:0.5,boost:1},
            mText:{band:'mid',sens:0.4},   mTextGlow:{band:'mid',sens:0.5},
            mPalms:{band:'bass',sens:0.5,boost:1},
            mPalmHalo:{band:'bass',sens:0.5,boost:1},
@@ -520,8 +522,9 @@ function paintPalette(s, pal){
   s.mtn.fill = pal.mtn[0]; s.mtn.edge = pal.mtn[1];
   s.stars.color = pal.stars;
   s.clouds.color = pal.cloud;
-  s.fx.heroColor = pal.accent; s.fx.textColor = pal.accent;
+  s.fx.textColor = pal.accent;
   s.fx.beamColor = pal.sun[2];
+  s.car.neon = pal.accent;
 }
 
 /* Curated presets — patches applied over DEFAULTS. Each one is built to
@@ -657,27 +660,23 @@ const PRESETS = [
       s.audio.mSunGlowInt = { band:'bass',   sens:0.7 };
       s.audio.mBloom      = { band:'bass',   sens:0.45, boost:0.3 }; } },
   { id:'acid-moon', name:'Acid Moon', patch:s => { paintPalette(s, PALETTES[6]);
-      // the psychedelic one: wire moon over hue-cycling lines, a slow
-      // orbiting camera and a torus hanging in the sky
+      // the psychedelic one: wire moon over hue-cycling lines and a slow
+      // orbiting camera
       s.sun.mode = 'wire'; s.sun.size = 88; s.sun.x = 28; s.sun.y = 46;
       s.sun.wireDetail = 2; s.sun.glow = 0.45; s.sun.glowInt = 1.3;
       s.grid.colorMode = 'cycle'; s.grid.flowSpd = 0.8; s.grid.glow = 1.0;
       s.grid.amp = 26; s.grid.rough = 1.6; s.grid.reflect = 0.35;
       s.mtn.layers = 3; s.mtn.height = 26;
-      s.fx.hero = 'torus'; s.fx.heroColor = '#eaff00'; s.fx.heroSpin = 0.25;
-      s.fx.heroSize = 1.2; s.fx.heroY = 30; s.fx.heroZ = -140;
       s.stars.density = 0.9; s.stars.drift = 0.45; s.stars.twinkle = 1.1;
       s.cam.orbit = 0.2; s.cam.orbitSpd = 0.25;
       s.post.chroma = 0.3; s.post.grain = 0.22;
       s.anim.hue = 0; s.anim.hueShift = 0;
-      /* the loud one. Moon and torus both pump on the bass, and this is
-         the only preset that takes the FOV punch — a couple of degrees,
-         enough to feel the beat in the camera without inducing seasickness */
+      /* the loud one. The moon pumps on the bass, and this is the only
+         preset that takes the FOV punch — a couple of degrees, enough to
+         feel the beat in the camera without inducing seasickness */
       s.audio.on = true;
       s.audio.mSun        = { band:'bass',   sens:0.8,  boost:1 };
       s.audio.mSunGlowInt = { band:'bass',   sens:0.8 };
-      s.audio.mHero       = { band:'bass',   sens:0.8 };
-      s.audio.mHeroGlow   = { band:'treble', sens:0.7 };
       s.audio.mGrid       = { band:'bass',   sens:1.0,  boost:0.7 };
       s.audio.mTerrain    = { band:'mid',    sens:0.7,  boost:0.6 };
       s.audio.mMtn        = { band:'bass',   sens:0.6,  boost:1 };
@@ -711,6 +710,41 @@ const PRESETS = [
       s.audio.mSunGlowInt = { band:'bass',   sens:0.6 };
       s.audio.mBloom      = { band:'bass',   sens:0.7,  boost:0.5 };
       s.audio.mStars      = { band:'off',    sens:0.6 }; } },
+  { id:'countach-cruise', name:'Countach Cruise', patch:s => { paintPalette(s, PALETTES[0]);
+      /* the car preset. Everything here exists to keep the Countach
+         readable: a big low sun directly behind it for the rim light, a
+         wide dark wet highway under it, a camera dropped almost to the
+         tarmac, and a flat floor — terrain bumps would fight the
+         reflection the car casts down the road. */
+      s.sun.size = 74; s.sun.x = -16; s.sun.y = 30; s.sun.bands = 11;
+      s.sun.glow = 0.7;
+      s.grid.speed = 1.7; s.grid.amp = 0; s.grid.spacing = 5;
+      s.grid.reflect = 0.5; s.grid.reflectScene = 0.55;
+      s.road.on = true; s.road.width = 9;
+      s.road.surface = '#0b0518'; s.road.gloss = 0.8; s.road.puddle = 0.25;
+      s.road.center = 'dashed'; s.road.centerColor = '#ffd319';
+      s.road.edge = 'solid'; s.road.lanes = 2; s.road.glow = 1.2;
+      s.car.on = true; s.car.z = -20; s.car.lane = 0.40;
+      s.car.lights = 1.2; s.car.glow = 0.45; s.car.shadow = 0.75;
+      s.car.style = 'both'; s.car.motion = 0.85; s.car.skid = 0.6;
+      s.mtn.mode = 'mountains'; s.mtn.layers = 2; s.mtn.height = 28;
+      s.cam.height = 2.4; s.cam.fov = 58; s.cam.sway = 0.3;
+      s.stars.density = 0.7; s.post.scan = 0.3; s.post.chroma = 0.25;
+      s.post.bloomStr = 0.8;
+      s.anim.hue = 0; s.anim.hueShift = 0;
+      /* the engine bay is the instrument: bass lights the tail up and
+         drives the streaks off the tyres, and the floor keeps time */
+      s.audio.on = true;
+      s.audio.mCarGlow    = { band:'bass',   sens:0.9 };
+      s.audio.mCarMotion  = { band:'bass',   sens:0.6, boost:1 };
+      s.audio.mGrid       = { band:'bass',   sens:0.85, boost:0.5 };
+      s.audio.mRoad       = { band:'bass',   sens:0.7,  boost:0.6 };
+      s.audio.mSun        = { band:'bass',   sens:0.45, boost:1 };
+      s.audio.mSunGlowInt = { band:'bass',   sens:0.6 };
+      s.audio.mMtn        = { band:'bass',   sens:0.4,  boost:1 };
+      s.audio.mBloom      = { band:'bass',   sens:0.6,  boost:0.4 };
+      s.audio.mStars      = { band:'treble', sens:0.7 };
+      s.audio.mTerrain    = { band:'off',    sens:0.6,  boost:1 }; } },
   { id:'eerie-whispers', name:"TehGM's Eerie Whispers", patch:s => {
       /* contributed by TehGM — a green-lit rain scene built to show off
          the audio pipeline: most bands are mapped, bloom sits near zero
@@ -799,6 +833,23 @@ const PERF_KEYS = ['play', 'speed', 'fpsCap', 'fpsOverride', 'adaptive', 'dprCap
 function keepPerfPrefs(dst, src){
   for (const k of PERF_KEYS) dst.anim[k] = src.anim[k];
   return dst;
+}
+
+/* Settings that no longer exist. A scene is loaded by merging it ONTO
+   DEFAULTS, which copies across whatever keys it happens to carry — so
+   without this, a link or an autosave written while the wireframe hero
+   object still existed would keep re-serialising fx.hero* forever, and
+   the dead keys would outlive every other trace of the feature.
+   Dropped rather than migrated: the hero is gone, not renamed.        */
+const DEAD_KEYS = {
+  fx:    ['hero', 'heroColor', 'heroSpin', 'heroSize', 'heroX', 'heroY',
+          'heroZ', 'heroAngle', 'heroBloomOn', 'heroBloom'],
+  audio: ['mHero', 'mHeroGlow', 'mCar'],
+};
+function dropDeadKeys(s){
+  for (const grp in DEAD_KEYS)
+    if (s[grp]) for (const k of DEAD_KEYS[grp]) delete s[grp][k];
+  return s;
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1232,7 +1283,7 @@ wireSquash.add(wireMoon);
 /* floor reflection of the wire moon: the SAME geometry, mirrored about
    the ground plane (scale.y = -1) and drawn as a translucent decal, so
    the reflection matches the moon's exact shape, spin and detail.
-   Farthest-first transparent sorting keeps palms/heroes drawn over it. */
+   Farthest-first transparent sorting keeps palms and the car over it.  */
 const wireReflMat = new THREE.ShaderMaterial({
   transparent: true, blending: THREE.AdditiveBlending,
   depthTest: false, depthWrite: false, fog: false,
@@ -2911,7 +2962,7 @@ function updateClouds(dt){
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   11. HERO EXTRAS — palms, wireframe object, neon text, beams, rain
+   11. SCENE EXTRAS — palms, car, neon text, beams, weather
    ════════════════════════════════════════════════════════════════════ */
 
 /* — palm silhouettes (procedural canvas drawing, tinted by material) — */
@@ -3095,69 +3146,1214 @@ function rebuildPalms(){
   gridMat.uniforms.uPalmN.value = Math.min(n, 8);
 }
 
-/* — wireframe hero object (pyramid / sphere / torus / car) — */
-const heroGroup = new THREE.Group();
-heroGroup.position.set(0, 7.5, -70);
-scene.add(heroGroup);
-const heroMat = new THREE.LineBasicMaterial({ color: 0x00e5ff, transparent: true,
-  opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+/* ── CAR ──────────────────────────────────────────────────────────────
+   A real low-poly mesh, not a billboard. The camera sways, dollies and
+   can orbit, and a sprite would shear off the tarmac the moment it did —
+   this has to hold up as an object standing on the road, so it is
+   modelled, lit and reflected as one.
 
-function makeCarLines(){
-  // side profile of a low wedge coupé, extruded across its width
-  const S = 3.0, W = 2.6 * S;
-  const prof = [[-2.3,0.30],[-2.3,0.72],[-1.05,0.82],[-0.30,1.52],
-                [ 1.05,1.56],[ 1.95,0.95],[ 2.40,0.85],[ 2.40,0.30]]
-               .map(([z, y]) => [z * S, y * S]);
-  const verts = [], quads = [];
-  const n = prof.length;
-  for (const x of [-W / 2, W / 2])
-    for (const [z, y] of prof) verts.push(x, y, z);
-  // side faces (fan) + skin quads between the two sides
-  const idx = [];
-  for (let s = 0; s < 2; s++){
-    const o = s * n;
-    for (let i = 1; i < n - 1; i++) idx.push(o, o + i, o + i + 1);
+   Cost is kept down by shape, not by cutting the model back:
+
+   · The whole car — body, glass, wheels, lamps, wing — is ONE non-indexed
+     BufferGeometry carrying a per-vertex material id, so it draws in a
+     single call. The fragment shader picks a look off that id; the branch
+     is coherent per triangle and there is no second draw call to pay for.
+   · The wheels and the pop-up headlights turn in the VERTEX stage, about
+     a pivot carried on an attribute. Nothing about the car needs a matrix
+     update, a group hierarchy or any CPU work per frame beyond writing
+     six uniforms.
+   · The rear wing is emitted last, so switching it off is a draw-range
+     change rather than a rebuild.
+   · Nothing is built until the car is first switched on: with car.on
+     false there is no geometry, no shader program, no draw call and no
+     per-frame work at all.
+
+   Model space is METRES, car-local: +Z nose, +X right, y = 0 at the
+   ground. carRoot scales that into world units.                        */
+
+/* World units per metre. Read off the road: the default carriageway is
+   2*7.5 = 15 units wide and carries two lanes, so a unit is ~0.48 m.
+   At this scale the camera's 3.2-unit default height is ~1.5 m, which is
+   about where your eyes are in a car — the scene agrees with itself.   */
+const M2W = 2.1;
+
+/* per-vertex material ids */
+const CAR_BODY = 0, CAR_GLASS = 1, CAR_TYRE = 2, CAR_RIM = 3,
+      CAR_TAIL = 4, CAR_HEAD = 5, CAR_TRIM = 6, CAR_EXH = 7,
+      CAR_AMBER = 8, CAR_PLATE = 9;
+/* aRot.w — which uniform angle a vertex turns with */
+const SPIN_NONE = 0, SPIN_WF = 1, SPIN_WR = 2, SPIN_POP = 3;
+const NO_SPIN = [0, 0, 0, SPIN_NONE];
+
+/** Polygon soup → flat-shaded triangles + a deduplicated edge list.
+    Winding is load-bearing: normals come from the vertex order, so a
+    reversed face is both unlit and culled. Every emitter below was
+    derived against this convention (CCW seen from outside).           */
+function carBuilder(){
+  const P = [], N = [], MT = [], RT = [];              // solid
+  /* Wire edges are collected with the face that emitted them and pruned
+     at the end: an edge shared by two faces that meet at less than
+     CREASE_COS and carry the same material is INSIDE a smooth surface —
+     drawing it turns the wireframe into a mesh of triangulation noise
+     rather than the car's own lines. Boundaries, creases and material
+     changes survive; the tessellation of the wheels and the loft does
+     not. Same idea as EdgesGeometry, done here because the polygon
+     topology is already known and its diagonals never existed.        */
+  const CREASE_COS = Math.cos(25 * Math.PI / 180);
+  const edgeIx = new Map(), edges = [];
+  const key = p => `${Math.round(p[0] * 1e3)},${Math.round(p[1] * 1e3)},`
+                 + `${Math.round(p[2] * 1e3)}`;
+  let faceN = [0, 0, 0];                    // normal of the face being emitted
+  function tri(a, b, c, m, r){
+    const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+    const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+    let nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+    const l = Math.sqrt(nx*nx + ny*ny + nz*nz);
+    if (l < 1e-9) return;                     // collapsed ring segment
+    nx /= l; ny /= l; nz /= l;
+    for (const p of [a, b, c]){
+      P.push(p[0], p[1], p[2]); N.push(nx, ny, nz);
+      MT.push(m); RT.push(r[0], r[1], r[2], r[3]);
+    }
   }
-  for (let i = 0; i < n; i++){
-    const j = (i + 1) % n;
-    idx.push(i, n + i, n + j,  i, n + j, j);
+  function edge(a, b, m, r){
+    const ka = key(a), kb = key(b);
+    if (ka === kb) return;
+    const k = ka < kb ? ka + '|' + kb : kb + '|' + ka;
+    const prev = edgeIx.get(k);
+    if (prev !== undefined){
+      const e = edges[prev];
+      const d = e.n[0] * faceN[0] + e.n[1] * faceN[1] + e.n[2] * faceN[2];
+      if (d > CREASE_COS && e.m === m) e.keep = false;
+      return;
+    }
+    edgeIx.set(k, edges.length);
+    edges.push({ a, b, m, r, n: faceN, keep: true });
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-  geo.setIndex(idx);
-  const group = new THREE.Group();
-  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 8), heroMat));
-  geo.dispose();
-  // wheels
-  const wheelGeo = new THREE.EdgesGeometry(
-    new THREE.CylinderGeometry(0.34 * S, 0.34 * S, 0.2, 9), 8);
-  for (const [wx, wz] of [[-W/2, -1.45*S], [-W/2, 1.6*S], [W/2, -1.45*S], [W/2, 1.6*S]]){
-    const wheel = new THREE.LineSegments(wheelGeo, heroMat);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(wx, 0.34 * S, wz);
-    group.add(wheel);
-  }
-  return group;
+  const B = {
+    /** convex polygon, fanned; its boundary becomes wireframe lines */
+    poly(pts, m, r){
+      r = r || NO_SPIN;
+      for (let i = 1; i < pts.length - 1; i++) tri(pts[0], pts[i], pts[i+1], m, r);
+      /* Newell's normal for the whole polygon, not the last fan triangle:
+         the loft's skin quads are not planar, and a degenerate triangle
+         (collapsed ring segment) contributes nothing at all */
+      let nx = 0, ny = 0, nz = 0;
+      for (let i = 0; i < pts.length; i++){
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        nx += (p[1] - q[1]) * (p[2] + q[2]);
+        ny += (p[2] - q[2]) * (p[0] + q[0]);
+        nz += (p[0] - q[0]) * (p[1] + q[1]);
+      }
+      const l = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1;
+      faceN = [nx / l, ny / l, nz / l];
+      for (let i = 0; i < pts.length; i++)
+        edge(pts[i], pts[(i + 1) % pts.length], m, r);
+    },
+    /** same polygon mirrored across x=0 — order reversed to keep winding */
+    polyM(pts, m, r){
+      B.poly(pts, m, r);
+      B.poly(pts.map(p => [-p[0], p[1], p[2]]).reverse(), m, r);
+    },
+    /* Hexahedron with eight independent corners. Almost nothing on a
+       Countach is an axis-aligned box — the chin spoiler splays outward,
+       the intake ears taper, the wing struts rake back — and shearing a
+       hex costs exactly what a box costs. Corner order is the box's:
+       0..3 = the -z face read anticlockwise from +z (bottom-left,
+       bottom-right, top-right, top-left), 4..7 = the same on +z.
+       Per-face material overrides via `faces` (px/nx/py/ny/pz/nz).    */
+    hex(p, m, r, faces){
+      const f = faces || {};
+      B.poly([p[5], p[1], p[2], p[6]], f.px ?? m, r);
+      B.poly([p[0], p[4], p[7], p[3]], f.nx ?? m, r);
+      B.poly([p[7], p[6], p[2], p[3]], f.py ?? m, r);
+      B.poly([p[0], p[1], p[5], p[4]], f.ny ?? m, r);
+      B.poly([p[4], p[5], p[6], p[7]], f.pz ?? m, r);
+      B.poly([p[1], p[0], p[3], p[2]], f.nz ?? m, r);
+    },
+    hexM(p, m, r, faces){
+      B.hex(p, m, r, faces);
+      // mirror, then swap the two z-faces' corner pairs back into order
+      const q = p.map(v => [-v[0], v[1], v[2]]);
+      B.hex([q[1], q[0], q[3], q[2], q[5], q[4], q[7], q[6]], m, r,
+        faces ? { ...faces, px: faces.nx, nx: faces.px } : faces);
+    },
+    /** axis-aligned box — a hex with its corners on the two z-planes */
+    box(x0, x1, y0, y1, z0, z1, m, r, faces){
+      B.hex([[x0,y0,z0], [x1,y0,z0], [x1,y1,z0], [x0,y1,z0],
+             [x0,y0,z1], [x1,y0,z1], [x1,y1,z1], [x0,y1,z1]], m, r, faces);
+    },
+    boxM(x0, x1, y0, y1, z0, z1, m, r, faces){
+      B.box(x0, x1, y0, y1, z0, z1, m, r, faces);
+      B.box(-x1, -x0, y0, y1, z0, z1, m, r, faces
+        ? { ...faces, px: faces.nx, nx: faces.px } : faces);
+    },
+    /** counts so far — the wing split points */
+    count(){ return MT.length; },
+    wireCount(){ return edges.length; },
+    /** @param wingAt edge index the wing starts at (from wireCount) */
+    finish(wingAt){
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+      g.setAttribute('normal',   new THREE.Float32BufferAttribute(N, 3));
+      g.setAttribute('aMat',     new THREE.Float32BufferAttribute(MT, 1));
+      g.setAttribute('aRot',     new THREE.Float32BufferAttribute(RT, 4));
+      g.computeBoundingSphere();
+      const EP = [], EM = [], ER = [];
+      let wireSplit = Infinity;
+      edges.forEach((e, i) => {
+        if (i === wingAt) wireSplit = EM.length;
+        if (!e.keep) return;
+        EP.push(e.a[0], e.a[1], e.a[2], e.b[0], e.b[1], e.b[2]);
+        EM.push(e.m, e.m);
+        ER.push(...e.r, ...e.r);
+      });
+      const w = new THREE.BufferGeometry();
+      w.setAttribute('position', new THREE.Float32BufferAttribute(EP, 3));
+      w.setAttribute('aMat',     new THREE.Float32BufferAttribute(EM, 1));
+      w.setAttribute('aRot',     new THREE.Float32BufferAttribute(ER, 4));
+      w.computeBoundingSphere();
+      return { solid: g, wire: w, wireSplit };
+    },
+  };
+  return B;
 }
-function rebuildHero(){
-  for (const c of [...heroGroup.children]){
-    c.traverse(o => o.geometry && o.geometry.dispose());
-    heroGroup.remove(c);
+
+/* ── Lamborghini Countach 5000 QV ──────────────────────────────────────
+   Real proportions: 4.14 m long, 2.00 over the flares, 1.07 tall, 2.45
+   wheelbase, with the QV's enormous rear tyres.
+
+   The shell is lofted from longitudinal stations, each a closed 10-gon.
+   Stations sit ON the creases — cowl, screen head, rear-glass base — so
+   flat shading folds the wedge for free instead of needing extra
+   geometry to fake a crease.
+
+   The wheel arches come out of the same loft rather than costing their
+   own geometry, and the trick is worth spelling out. Over an axle the
+   ring's flare edge (w, ysl) climbs to clear the tyre while the sill
+   (ws) tucks sharply inboard, so the panel between them runs diagonally
+   from deep inside the wheel well up to the top of the arch. Everywhere
+   that panel sits lower than the tyre it is also inboard of the tyre's
+   outer face, so the wheel hides it; the only part that reaches the
+   car's outer surface is above the tread. What is left is a real arch
+   opening with the wheel sitting in it — for the price of four extra
+   stations per axle and no new primitive at all.
+
+   Everything a lofted ring genuinely cannot express — the chin spoiler,
+   the recessed front grilles, the pop-up pods, the intake ears behind
+   the doors, the engine louvres, the lamp clusters, the quad pipes, the
+   wing — is a hex bolted on afterwards, each one standing PROUD of what
+   it sits on. Nothing is a decal: a face a fraction above another
+   z-fights into stripes once the car is a couple of hundred units out,
+   and a part with real depth in front of another cannot.
+
+     z      yb    ws    ysl   wLo   yf    wHi   wt    yt    ytc         */
+const COUNTACH_ST = [
+  [-1.99, 0.42, 0.72, 0.46, 0.83, 0.70, 0.74, 0.70, 0.78, 0.74],  //  0 tail face
+  [-1.88, 0.24, 0.78, 0.36, 0.90, 0.76, 0.87, 0.78, 0.86, 0.83],  //  1 under-tail tuck
+  [-1.70, 0.18, 0.84, 0.34, 0.94, 0.80, 0.97, 0.86, 0.92, 0.90],  //  2 arch, back
+  [-1.52, 0.17, 0.70, 0.60, 0.96, 0.82, 1.00, 0.90, 0.95, 0.94],  //  3
+  [-1.30, 0.16, 0.62, 0.70, 0.96, 0.84, 1.00, 0.92, 0.97, 0.96],  //  4 rear axle
+  [-1.08, 0.16, 0.70, 0.60, 0.96, 0.84, 1.00, 0.92, 0.99, 0.98],  //  5
+  [-0.90, 0.16, 0.82, 0.34, 0.95, 0.85, 0.99, 0.91, 1.02, 1.02],  //  6 arch, front
+  [-0.72, 0.16, 0.88, 0.30, 0.95, 0.85, 0.98, 0.80, 1.05, 1.05],  //  7 deck / screen base
+  [-0.40, 0.16, 0.88, 0.30, 0.94, 0.85, 0.96, 0.56, 1.07, 1.07],  //  8 roof rear
+  [ 0.06, 0.16, 0.88, 0.30, 0.94, 0.84, 0.96, 0.58, 1.07, 1.07],  //  9 screen head
+  [ 0.62, 0.16, 0.88, 0.300, 0.940, 0.800, 0.960, 0.820, 0.840, 0.810], // 10 cowl
+  [ 0.85, 0.16, 0.860,0.400, 0.900, 0.660, 0.895, 0.865, 0.812, 0.798], // 11 arch, back
+  [ 0.97, 0.16, 0.700,0.640, 0.915, 0.720, 0.908, 0.868, 0.800, 0.786], // 12
+  [ 1.15, 0.16, 0.620,0.690, 0.925, 0.770, 0.916, 0.866, 0.790, 0.776], // 13 front axle
+  [ 1.33, 0.16, 0.700,0.640, 0.915, 0.720, 0.906, 0.850, 0.740, 0.728], // 14
+  [ 1.51, 0.17, 0.820,0.400, 0.890, 0.610, 0.880, 0.822, 0.672, 0.664], // 15 arch, front
+  [ 1.86, 0.115,0.820,0.285, 0.880, 0.470, 0.868, 0.740, 0.520, 0.516], // 16 nose shoulder
+  [ 2.04, 0.100,0.800,0.245, 0.860, 0.380, 0.840, 0.632, 0.430, 0.428], // 17 nose face
+];
+/** one station → 10 ring points, counter-clockwise in xy.
+    The flank carries TWO widths — wLo at the arch lip and wHi at the
+    shoulder — and the sign of the difference between them is what stops
+    the car being a box. Over the REAR wheels wHi > wLo, which is those
+    flares' tumblehome; at the tail wHi < wLo, so the Kamm panel is a
+    trapezoid that leans in as it rises instead of a vertical slab. A
+    single width per station could express neither.
+    Over the FRONT wheels the sign flips: wLo is the widest thing on the
+    car's nose, so the widest point sits DOWN at the arch lip, level with
+    the top of the tyre, and the flank above it runs almost straight up
+    to a hard crease at wt before the bonnet. Putting the maximum up at
+    the shoulder instead — which is what this table used to do — turns
+    each front wing into a smooth blister, and head on the whole nose
+    reads as a rounded loaf rather than a wedge with creases in it.
+    The nose tapers in plan almost entirely along the TOP edge and
+    hardly at all along the bottom: wt falls 866 -> 632 from the front
+    axle to the nose while wLo barely moves, 925 -> 860. That is why the
+    car is a wedge in two axes at once, and why the front bumper is
+    nearly as wide as the widest part of the car while the bonnet
+    between the wings is barely more than a metre across.
+    yt above ytc drops the top edge into a valley down the middle. At the
+    tail that is the whole point: the Countach's rear fenders stand proud
+    of the engine deck, and that hump-valley-hump edge is why the rear
+    panel cannot be one rectangle. Along the bonnet it is nearly nothing
+    — under 20 mm — because a Countach's bonnet is a FLAT plane.        */
+function countachRing(st){
+  const [z, yb, ws, ysl, wLo, yf, wHi, wt, yt, ytc] = st;
+  const half = [[0, yb], [ws, yb + 0.02], [wLo, ysl], [wHi, yf], [wt, yt]];
+  const out = half.map(([x, y]) => [x, y, z]);
+  out.push([0, ytc, z]);
+  for (let i = half.length - 1; i >= 1; i--)
+    out.push([-half[i][0], half[i][1], z]);
+  return out;
+}
+/* Skin material for span i (station i → i+1), ring edge k.
+   k: 0 underbody R · 1 wheel well R · 2 flare face R · 3 upper flank R
+      4 roof R · 5 roof L · 6 upper flank L · 7 flare face L
+      8 wheel well L · 9 underbody L                                   */
+function countachSkin(i, k){
+  if (k === 0 || k === 9) return CAR_TRIM;                          // underbody
+  if (i >= 3 && i <= 5) return (k === 4 || k === 5) ? CAR_TRIM      // engine bay
+                             : CAR_BODY;                            //   under the slats
+  if (i === 6) return (k === 3 || k === 6) ? CAR_TRIM : CAR_BODY;   // side intakes
+  if (i === 7) return (k === 4 || k === 5) ? CAR_GLASS : CAR_BODY;  // rear screen
+  if (i === 8) return (k === 3 || k === 6) ? CAR_GLASS : CAR_BODY;  // side glass
+  if (i === 9) return (k >= 3 && k <= 6) ? CAR_GLASS : CAR_BODY;    // windscreen
+  return CAR_BODY;
+}
+/** one wheel and its mirror: tyre, sidewall, five-slot Bravo alloy */
+function countachWheels(B, cx, cz, r, hw, rim, spin){
+  const SEG = 15;                       // 15 → exactly 5 dark slots
+  const rot = [r, cz, 0, spin];
+  const x0 = cx - hw, x1 = cx + hw;     // inner, outer
+  const at = (x, k, rr) => {
+    const a = k / SEG * Math.PI * 2;
+    return [x, r + Math.sin(a) * rr, cz + Math.cos(a) * rr];
+  };
+  for (let k = 0; k < SEG; k++){
+    const k1 = (k + 1) % SEG;
+    // tread
+    B.polyM([at(x0, k, r), at(x1, k, r), at(x1, k1, r), at(x0, k1, r)],
+            CAR_TYRE, rot);
+    // outer sidewall, down to the alloy
+    B.polyM([at(x1, k, r), at(x1, k, rim), at(x1, k1, rim), at(x1, k1, r)],
+            CAR_TYRE, rot);
+    // alloy face — every third wedge is a slot
+    B.polyM([[x1, r, cz], at(x1, k1, rim), at(x1, k, rim)],
+            k % 3 === 0 ? CAR_TRIM : CAR_RIM, rot);
+    // inner face (only ever seen through the arch)
+    B.polyM([[x0, r, cz], at(x0, k, r), at(x0, k1, r)], CAR_TYRE, rot);
   }
-  const type = state.fx.hero;
-  if (type === 'none') return;
-  let obj;
-  if (type === 'pyramid')
-    obj = new THREE.LineSegments(new THREE.EdgesGeometry(
-      new THREE.ConeGeometry(6.5, 9, 4), 1), heroMat);
-  else if (type === 'sphere')
-    obj = new THREE.LineSegments(new THREE.WireframeGeometry(
-      new THREE.IcosahedronGeometry(6, 1)), heroMat);
-  else if (type === 'torus')
-    obj = new THREE.LineSegments(new THREE.EdgesGeometry(
-      new THREE.TorusGeometry(5.5, 2, 8, 18), 1), heroMat);
-  else obj = makeCarLines();
-  heroGroup.add(obj);
+}
+/** build the Countach; returns { solid, wire, split, wireSplit } */
+function buildCountach(){
+  const B = carBuilder();
+
+  /* ── shell ── */
+  const rings = COUNTACH_ST.map(countachRing);
+  const n = rings[0].length;
+  for (let i = 0; i < rings.length - 1; i++){
+    const a = rings[i], b = rings[i + 1];
+    for (let k = 0; k < n; k++){
+      const k1 = (k + 1) % n;
+      B.poly([a[k], a[k1], b[k1], b[k]], countachSkin(i, k));
+    }
+  }
+  // caps: fanned from a point inside the ring, which stays valid through
+  // the shallow notch the bonnet channel puts in the top edge
+  const capC = st => [0, (st[1] + st[9]) * 0.5, st[0]];
+  const first = rings[0], last = rings[rings.length - 1];
+  const c0 = capC(COUNTACH_ST[0]), c1 = capC(COUNTACH_ST[COUNTACH_ST.length - 1]);
+  for (let k = 0; k < n; k++){
+    const k1 = (k + 1) % n;
+    B.poly([c0, first[k1], first[k]], CAR_BODY);
+    B.poly([c1, last[k], last[k1]], CAR_BODY);
+  }
+
+  /* ── wheels — 225/50 front, 345/35 rear, as the QV wore them.
+        Each sits ~3 cm inside its flare, so the flare lip reads and the
+        arch opening the loft carves has something in it.             */
+  /* Radii are the real rolling radii, not guesses: 225/50 VR15 is
+     381 + 2*112.5 = 606 mm across, 345/35 VR15 is 381 + 2*120.75 =
+     622 mm. Track 1535 front / 1605 rear puts the centreplanes at
+     0.77 and 0.80, and the flares clear the outer sidewalls by the
+     ~30 mm that makes them look shrink-wrapped onto the tyres.      */
+  countachWheels(B,  0.77,  1.15, 0.303, 0.1125, 0.200, SPIN_WF);
+  countachWheels(B,  0.80, -1.30, 0.311, 0.1725, 0.205, SPIN_WR);
+
+  /* ── front ──
+     A Countach's face is three stacked bands, each stepping forward as
+     it drops: the flat upper nose, a bumper bar standing proud of it
+     with the lamps and grilles recessed INTO that bar, and a slim
+     spoiler blade under everything. What used to sit here was one
+     full-width slab hung off the front of the car, 300 mm deep and
+     wider than the bodywork, which read as a snowplough.
+     Bumper bar in strips: the two bays simply stop 35 mm short of the
+     body strips either side, so the recess is a gap between real
+     surfaces and its neighbours become its side walls. The ORDER is the
+     one thing a photograph settles instantly, and it is the opposite of
+     what was here — going outboard from the centre it runs body,
+     rectangular driving lamp, divider, slatted grille, corner.       */
+  const BY0 = 0.245, BY1 = 0.395, BZ0 = 2.020, BZ1 = 2.085;
+  const RY0 = 0.270, RY1 = 0.360, BZR = 2.052;   // the recessed bays
+  B.box(-0.205, 0.205, BY0, BY1, BZ0, BZ1, CAR_BODY, NO_SPIN);
+  /* The driving lamp is a PLATE, not a head lamp: CAR_HEAD is tied to the
+     pop-up angle now, so borrowing it here would blank these to body
+     colour whenever the lights are down and blow them out to pure white
+     whenever they are up. A pale unlit lens is what they read as. */
+  B.boxM(0.210, 0.348, RY0, RY1, BZ0, BZR, CAR_BODY, NO_SPIN, { pz: CAR_PLATE });
+  B.boxM(0.348, 0.368, BY0, BY1, BZ0, BZ1, CAR_BODY, NO_SPIN);
+  B.boxM(0.368, 0.628, RY0, RY1, BZ0, BZR, CAR_BODY, NO_SPIN, { pz: CAR_TRIM });
+  B.boxM(0.628, 0.800, BY0, BY1, BZ0, BZ1, CAR_BODY, NO_SPIN);
+  /* The spoiler's real depth is in the SHELL: stations 16 and 17 drop
+     their sill to 100 mm and carry it out to 790, so the whole nose ends
+     in a low valance the way the car's does. All that is left to bolt on
+     is the lip — 60 mm of forward projection, its top edge buried inside
+     that valance so there is no seam, and narrow enough that it never
+     shows as a ledge from head on. A blade sized to read from the front
+     is the thing that made this a snowplough.                        */
+  /* 90 mm is the lowest anything on this car goes, front or rear, and it
+     is deliberate: suspension travel, roll on a cambered road and the
+     audio bump all move the body DOWN, and between them they use most of
+     what is left before a corner would dip through the tarmac.       */
+  B.hex([[-0.800,0.090,1.94], [0.800,0.090,1.94], [0.800,0.245,1.94], [-0.800,0.245,1.94],
+         [-0.780,0.090,2.055], [0.780,0.090,2.055], [0.780,0.215,2.055], [-0.780,0.215,2.055]],
+        CAR_BODY, NO_SPIN);
+  // brake-cooling slots in the blade. Without them the whole 160 mm
+  // between the bumper and the ground is one blank band, which is a lot
+  // of flat colour right where the eye lands.
+  B.boxM(0.450, 0.680, 0.120, 0.180, 2.045, 2.061, CAR_BODY, NO_SPIN,
+         { pz: CAR_TRIM });
+  /* The lenses that actually read as this car's eyes. With the lamps
+     down — which is whenever it is driving away, so most of the time —
+     a Countach's face is these two trapezoids in the wing tops, not the
+     headlights, which are flush body colour and invisible. Sunk into
+     the surface rather than sat on it: the slab's underside is buried
+     in the bonnet, so only its lid shows.                            */
+  B.hexM([[0.480,0.548,1.76], [0.735,0.548,1.76], [0.735,0.574,1.76], [0.480,0.574,1.76],
+          [0.480,0.476,1.92], [0.690,0.476,1.92], [0.690,0.502,1.92], [0.480,0.502,1.92]],
+         CAR_TRIM, NO_SPIN, { py: CAR_AMBER });
+  /* Pop-up headlights, hinged the way the real mechanism is: the pivot
+     is the pod's FRONT edge, its tail swings up, and the lamp is on the
+     pod's TOP face — flush and dark lying down, aimed down the road
+     once it is up. Hinging at the back would point the beam at the sky.
+     The swing is 86 degrees rather than 60: at 60 the lens still faces
+     half at the sky, and from a camera above the car that turns it into
+     a billboard rather than a lamp. The lid is 180 mm long and its
+     inboard edge is half a metre off the centreline, which leaves a
+     full metre of unbroken flat bonnet between the two pods — the old
+     pods were 560 mm wide and 600 mm apart, so they covered the bonnet
+     instead of sitting in it.
+     aRot = pivot y, pivot z, swing in radians.                       */
+  const LZ0 = 1.44, LZ1 = 1.62, LY0 = 0.706, LY1 = 0.630;
+  const pop = [0.590, LZ1, 1.50, SPIN_POP];
+  B.hexM([[0.480,0.666,LZ0], [0.800,0.666,LZ0], [0.800,LY0,LZ0], [0.480,LY0,LZ0],
+          [0.480,0.590,LZ1], [0.800,0.590,LZ1], [0.800,LY1,LZ1], [0.480,LY1,LZ1]],
+         CAR_BODY, pop, { ny: CAR_TRIM, nz: CAR_TRIM });
+  /* TWO round 5 3/4 inch lamps per pod, not one rectangle. The factory
+     parts book lists four separate low/high beam assemblies, and a pair
+     of circles a side is what reads as a Countach with its lights up;
+     one lens filling the lid reads as a glowing flap, which is what the
+     old 440 x 260 rectangle did to the whole front of the car.
+     Eight-sided reads as round at every size the car is ever drawn, for
+     six triangles a lamp; at six the flats show once the size slider is
+     up. Each one is sheared to follow the lid's 23 degree slope — a lamp
+     with a level top would be half buried and half floating.        */
+  const lidY = z => LY0 + (LY1 - LY0) * (z - LZ0) / (LZ1 - LZ0);
+  function popLamp(cx){
+    const R = 0.068, SEG = 8, zc = 0.5 * (LZ0 + LZ1);
+    // negative sweep: seen from +y that is the winding that faces out
+    const at = (k, dy) => {
+      const a = -(k / SEG) * Math.PI * 2;
+      const z = zc + Math.sin(a) * R;
+      return [cx + Math.cos(a) * R, lidY(z) + dy, z];
+    };
+    const lens = [];
+    for (let k = 0; k < SEG; k++) lens.push(at(k, 0.016));
+    B.polyM(lens, CAR_HEAD, pop);
+    for (let k = 0; k < SEG; k++){          // the bucket, buried in the lid
+      const k1 = (k + 1) % SEG;
+      B.polyM([at(k, -0.028), at(k1, -0.028), at(k1, 0.016), at(k, 0.016)],
+              CAR_TRIM, pop);
+    }
+  }
+  popLamp(0.565); popLamp(0.720);
+
+  /* ── flanks ── */
+  // door mirrors on their stalks — small, but the Countach's stand well
+  // clear of the body and the silhouette is wrong without them
+  B.hexM([[0.92,0.78,0.52], [1.02,0.78,0.52], [1.02,0.83,0.52], [0.92,0.83,0.52],
+          [0.92,0.78,0.60], [1.02,0.78,0.60], [1.02,0.83,0.60], [0.92,0.83,0.60]],
+         CAR_TRIM, NO_SPIN);
+  B.hexM([[1.00,0.76,0.46], [1.11,0.76,0.46], [1.11,0.90,0.46], [1.00,0.90,0.46],
+          [1.00,0.78,0.64], [1.11,0.78,0.64], [1.11,0.90,0.64], [1.00,0.90,0.64]],
+         CAR_BODY, NO_SPIN);
+
+  /* ── engine deck ──
+     The louvred cover: body-coloured fins standing over the dark bay the
+     shell already recesses there, so the slats are lit and the gaps
+     between them are not.                                            */
+  const deckY = z => 0.95 + (z + 1.30) * 0.172;
+  for (let j = 0; j < 6; j++){
+    const zc = -1.42 + j * 0.125, y = deckY(zc);
+    B.box(-0.54, 0.54, y - 0.03, y + 0.04, zc - 0.052, zc + 0.052,
+          CAR_BODY, NO_SPIN);
+  }
+  /* The intake ears behind the door glass — as much a part of the QV's
+     shape as the wing. Tall and open at the front, tapering away over
+     the rear deck.                                                   */
+  B.hexM([[0.56,0.96,-1.06], [0.84,0.96,-1.06], [0.84,1.01,-1.06], [0.56,1.01,-1.06],
+          [0.56,1.00,-0.70], [0.84,1.00,-0.70], [0.84,1.15,-0.70], [0.56,1.15,-0.70]],
+         CAR_BODY, NO_SPIN, { pz: CAR_TRIM });
+
+  /* ── rear ──
+     NOT one rectangle, which is what kept making this read as a slab.
+     The engine deck falls into a valley between the two rear fender
+     humps, and the lamp panel follows that line: under each hump a TALL
+     end section, raked inward as it rises so its outer end comes to a
+     point, and between them the panel drops to a thin horizontal band
+     for the badges and the plate. The ends stand proud, the middle sits
+     30 mm further forward. Thick pointed ends, thin middle.          */
+  B.hexM([[0.30,0.470,-2.04], [0.75,0.470,-2.04], [0.65,0.755,-2.04], [0.30,0.755,-2.04],
+          [0.30,0.470,-1.99], [0.75,0.470,-1.99], [0.65,0.755,-1.99], [0.30,0.755,-1.99]],
+         CAR_TRIM, NO_SPIN);
+  B.box(-0.30, 0.30, 0.50, 0.66, -2.01, -1.99, CAR_TRIM, NO_SPIN);
+  /* Three SQUARE ~75 mm lenses a side, not one long bar: the Countach
+     wears Alfa Alfetta berlina clusters (Lamborghini 006310489/490), and
+     outboard→inboard they run amber indicator, red stop/tail, white
+     reverse. The indicator has to be the outboard one — ECE puts its
+     outer edge within 400 mm of the car's widest point, which on a
+     2000 mm body pins the cluster hard into the corner of the panel and
+     leaves a ~720 mm gap in the middle for the plate and the scripts. */
+  B.boxM(0.335, 0.425, 0.575, 0.690, -2.08, -2.04, CAR_TRIM, NO_SPIN, { nz: CAR_PLATE });
+  B.boxM(0.431, 0.549, 0.575, 0.690, -2.08, -2.04, CAR_TRIM, NO_SPIN, { nz: CAR_TAIL });
+  B.boxM(0.555, 0.645, 0.575, 0.690, -2.08, -2.04, CAR_TRIM, NO_SPIN, { nz: CAR_AMBER });
+  /* Deliberately ~35% larger than the real 250 x 90 cluster, and the red
+     stop lens wider than its neighbours. At true scale each lens is 13 px
+     on a wallpaper and the tail reads as a black slab with confetti on
+     it; the layout, the order and the wide centre gap are what make it a
+     Countach, so those stay exact and only the size is pushed.        */
+  // Euro plate, centred on the thin middle band
+  B.box(-0.21, 0.21, 0.545, 0.635, -2.04, -2.01, CAR_TRIM, NO_SPIN, { nz: CAR_PLATE });
+  /* The pipes hang UNDER the tail rather than sitting on it. The Kamm
+     face stops at y 0.42 and the body tucks hard forward below that, so
+     the quad outlets poke out of shadow beneath the lower edge — which
+     is also what stops the rear reading as one tall flat slab.        */
+  B.boxM(0.012, 0.097, 0.31, 0.39, -2.03, -1.95, CAR_TRIM, NO_SPIN, { nz: CAR_EXH });
+  B.boxM(0.112, 0.197, 0.31, 0.39, -2.03, -1.95, CAR_TRIM, NO_SPIN, { nz: CAR_EXH });
+
+  const split = B.count(), wingAt = B.wireCount();
+  // rear wing — last, so switching it off is a draw-range change
+  /* Span matters more than anything else about the wing. The QV's blade
+     is ~1.6 m on a 2.0 m car — clearly INSIDE the rear flares — and a
+     blade as wide as the haunches squares the whole rear silhouette off
+     into a rectangle, which is exactly what it must not be.           */
+  B.hex([[-0.85,1.11,-2.08], [0.85,1.11,-2.08], [0.85,1.17,-2.08], [-0.85,1.17,-2.08],
+         [-0.85,1.07,-1.50], [0.85,1.07,-1.50], [0.85,1.13,-1.50], [-0.85,1.13,-1.50]],
+        CAR_BODY, NO_SPIN);
+  // wide plates, not posts — the QV's uprights are as much of the wing's
+  // signature as the blade, and a thin stalk reads as a table leg
+  B.hexM([[0.38,0.82,-1.74], [0.56,0.82,-1.74], [0.56,1.12,-1.86], [0.38,1.12,-1.86],
+          [0.38,0.82,-1.60], [0.56,0.82,-1.60], [0.56,1.12,-1.72], [0.38,1.12,-1.72]],
+         CAR_BODY, NO_SPIN);
+  return { ...B.finish(wingAt), split };
+}
+
+/* Model registry — the extension point for the cars that follow. `size`
+   is the built model's own bounding box in metres (length, half-width,
+   height); the placement and shadow code reads it rather than assuming
+   any one car's proportions.                                          */
+const CAR_MODELS = {
+  lambo: { name: 'Lamborghini', build: buildCountach,
+           len: 4.17, halfW: 1.02, height: 1.17 },
+};
+
+/* ── car materials ────────────────────────────────────────────────────
+   No lights in this scene, so the paint is lit the way the rest of the
+   wallpaper is: a reflected sky gradient (the SAME uniform objects the
+   sky dome uses, so the two can never drift), a specular off the sun's
+   actual position, and a Fresnel rim in the palette accent. Every
+   falloff is written with multiplication — pow() on a signed base is
+   undefined in GLSL and renders as black blocks on some drivers.       */
+const CAR_SPIN_GLSL = /* glsl */`
+  attribute float aMat;
+  attribute vec4  aRot;          // pivotY, pivotZ, swing, kind
+  uniform float uWheelF, uWheelR, uPopAng;
+  vec3 carSpin(inout vec3 n){
+    vec3 p = position;
+    float ang = aRot.w > 2.5 ? uPopAng * aRot.z
+              : aRot.w > 1.5 ? uWheelR
+              : aRot.w > 0.5 ? uWheelF : 0.0;
+    if (ang != 0.0){
+      float c = cos(ang), s = sin(ang);
+      vec2 d = p.yz - aRot.xy;
+      p.yz = aRot.xy + vec2(d.x * c - d.y * s, d.x * s + d.y * c);
+      n.yz = vec2(n.y * c - n.z * s, n.y * s + n.z * c);
+    }
+    return p;
+  }`;
+const CAR_HUE_GLSL = /* glsl */`
+  vec3 carHueRot(vec3 c, float a){
+    const vec3 W = vec3(0.299, 0.587, 0.114);
+    float ca = cos(a), sa = sin(a);
+    vec3 d = c - vec3(dot(c, W));
+    return vec3(dot(c, W)) + ca * d + sa * cross(vec3(0.57735), d);
+  }`;
+
+const carVert = /* glsl */`
+  ${CAR_SPIN_GLSL}
+  varying vec3 vN, vW;
+  varying float vM, vD;
+  #ifdef CAR_REFL
+    uniform float uStretchRef;
+  #endif
+  void main(){
+    vec3 n = normal;
+    vec3 p = carSpin(n);
+    vec4 wp = modelMatrix * vec4(p, 1.0);
+    vec3 wn = normalize(mat3(modelMatrix) * n);
+    #ifdef CAR_REFL
+      /* mirror about the ground plane, then smear with depth by exactly
+         the factor the floor shader uses on its own reflections */
+      wp.y = -wp.y; wn.y = -wn.y;
+      wp.y *= 1.0 + ${REFL_STRETCH}
+            * clamp(max(-wp.y, 0.0) / uStretchRef, 0.0, 1.0);
+    #endif
+    vW = wp.xyz; vN = wn; vM = aMat;
+    vec4 mv = viewMatrix * wp;
+    vD = -mv.z;
+    gl_Position = projectionMatrix * mv;
+  }`;
+const carFrag = /* glsl */`
+  varying vec3 vN, vW;
+  varying float vM, vD;
+  uniform vec3 uBody, uNeon, uSkyTop, uSkyMid, uSkyBot, uGround, uSunC, uSunPos;
+  uniform vec3 uFogColor, uCamPos;
+  uniform float uFogNear, uFogFar, uLights, uNeonAmt, uHeadOn;
+  #ifdef CAR_REFL
+    uniform float uOp, uHueR, uFadeK;
+    ${CAR_HUE_GLSL}
+  #endif
+  void main(){
+    vec3 N = normalize(vN);
+    vec3 V = normalize(uCamPos - vW);
+    float nv = max(dot(N, V), 0.0);
+    float fr = 1.0 - nv, fr2 = fr * fr, fr4 = fr2 * fr2;
+    /* the horizon line sliding across the panels is what sells lacquer,
+       so sample the real sky gradient off the reflected ray */
+    vec3 Rd = reflect(-V, N);
+    vec3 sky = mix(uSkyBot, uSkyMid, smoothstep(0.0, 0.32, Rd.y));
+    sky = mix(sky, uSkyTop, smoothstep(0.32, 0.95, Rd.y));
+    vec3 env = mix(uGround, sky, smoothstep(-0.10, 0.05, Rd.y));
+    vec3 L = normalize(uSunPos - vW);
+    float nl = max(dot(N, L), 0.0);
+    float h = max(dot(N, normalize(L + V)), 0.0);
+    float sp = h * h; sp = sp * sp; sp = sp * sp; sp = sp * sp;   // h^16
+    vec3 rim = uNeon * fr4 * uNeonAmt;
+
+    vec3 c;
+    if (vM < 0.5){                                    // body paint
+      c = uBody * (0.22 + 0.34 * (N.y * 0.5 + 0.5) + 0.34 * nl)
+        + env * (0.09 + 0.44 * fr2) + uSunC * sp * 1.4 + rim * 0.9;
+    } else if (vM < 1.5){                             // glass
+      c = uBody * 0.04 + env * (0.20 + 0.70 * fr2)
+        + uSunC * sp * 2.0 + rim * 0.5;
+    } else if (vM < 2.5){                             // tyre
+      c = vec3(0.018, 0.016, 0.026) + env * 0.05 * fr2 + rim * 0.45;
+    } else if (vM < 3.5){                             // alloy
+      c = vec3(0.30, 0.31, 0.36) * (0.35 + 0.65 * nl)
+        + env * (0.25 + 0.35 * fr2) + uSunC * sp * 2.4;
+    } else if (vM < 4.5){                             // tail lamps
+      c = vec3(1.0, 0.055, 0.10) * (0.35 + 1.15 * uLights) * (0.4 + 0.6 * nv);
+    } else if (vM < 5.5){                             // head lamps
+      /* Down, a Countach's lamps are behind a body-coloured lid that is
+         flush with the bonnet, so they paint as bodywork and the nose is
+         unbroken; up, they are lamps. Crossfading on the same angle that
+         raises the pod costs one mix on a few hundred pixels and saves
+         two dark rectangles sitting on the wing tops all the time.    */
+      c = mix(uBody * (0.22 + 0.34 * (N.y * 0.5 + 0.5) + 0.34 * nl)
+                + env * (0.09 + 0.44 * fr2) + rim * 0.9,
+              vec3(1.0, 0.96, 0.86) * (0.06 + 2.3 * uLights)
+                * (0.30 + 0.70 * nv),
+              uHeadOn);
+    } else if (vM < 6.5){                             // dark trim
+      c = vec3(0.022, 0.020, 0.034) + env * 0.09 * fr2 + rim * 0.55;
+    } else if (vM < 7.5){                             // exhaust pipes
+      // dark chrome with heat in the bore, not four little lamps
+      c = vec3(0.10, 0.10, 0.11) * (0.4 + 0.6 * nl) + env * 0.10 * fr2
+        + vec3(1.0, 0.35, 0.08) * uLights * 0.20;
+    } else if (vM < 8.5){                             // indicator lenses
+      // deliberately below the brake lights: an indicator that is not
+      // flashing is a dull orange, and two bright red bars either side
+      // of the plate is what actually reads as this car from behind
+      c = vec3(1.0, 0.42, 0.05) * (0.20 + 0.45 * uLights) * (0.4 + 0.6 * nv);
+    } else {                                          // number plate
+      /* flat and pale, not lit: at any real distance the plate is a light
+         rectangle in the middle of a dark tail, and that patch is one of
+         the strongest cues that the shape ahead is a car at all */
+      c = vec3(0.66, 0.66, 0.61) * (0.42 + 0.34 * nl) + env * 0.10;
+    }
+    c = mix(c, uFogColor, smoothstep(uFogNear, uFogFar, vD));
+    #ifdef CAR_REFL
+      if (vW.y > 0.0) discard;                // a mirror never rises
+      if (uHueR != 0.0) c = carHueRot(c, uHueR);
+      // compact support: the fade reaches exactly zero, so no hard ring
+      float a = uOp * (1.0 - smoothstep(0.0, uFadeK, -vW.y));
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(c * 0.72, a);
+    #else
+      gl_FragColor = vec4(c, 1.0);
+    #endif
+  }`;
+
+const carMat = new THREE.ShaderMaterial({
+  fog: false,
+  uniforms: {
+    /* the SAME uniform objects the sky dome and the floor already own:
+       one applySky updates the paint's environment and its fog too */
+    uSkyTop:  skyMat.uniforms.uTop,
+    uSkyMid:  skyMat.uniforms.uMid,
+    uSkyBot:  skyMat.uniforms.uBot,
+    uFogColor: gridMat.uniforms.uFogColor,
+    uFogNear:  gridMat.uniforms.uFogNear,
+    uFogFar:   gridMat.uniforms.uFogFar,
+    uCamPos:   gridMat.uniforms.uCamPos,
+    uBody:    { value: col('#2a0d46') },
+    uNeon:    { value: col('#00e5ff') },
+    uGround:  { value: col('#0a0616') },
+    uSunC:    { value: col('#ff2975') },
+    uSunPos:  { value: new THREE.Vector3(0, 41, -455) },
+    uLights:  { value: 1 },
+    uNeonAmt: { value: 1 },
+    uHeadOn:  { value: 0 },
+    uWheelF:  { value: 0 },
+    uWheelR:  { value: 0 },
+    uPopAng:  { value: 0 },
+  },
+  vertexShader: carVert, fragmentShader: carFrag,
+});
+/* Mirrored twin. Same geometry, same uniform OBJECTS — only the mirror,
+   the smear and the fade differ, and those are compiled in by a define
+   rather than branched over.                                           */
+const carReflMat = new THREE.ShaderMaterial({
+  fog: false, transparent: true, depthTest: false, depthWrite: false,
+  side: THREE.BackSide,               // the y-flip reverses every winding
+  defines: { CAR_REFL: 1 },
+  uniforms: Object.assign({}, carMat.uniforms, {
+    uOp:         { value: 0.5 },
+    uHueR:       { value: 0 },
+    uFadeK:      { value: 6 },
+    uStretchRef: { value: 25 },
+  }),
+  vertexShader: carVert, fragmentShader: carFrag,
+});
+
+/* wireframe overlay — Lines, never additive quads (see the note on
+   shootMat): a bright alpha-blended line over dark tarmac reads the same
+   on every GPU, and >1 colour still runs it into the bloom pass.       */
+const carWireVert = /* glsl */`
+  ${CAR_SPIN_GLSL}
+  varying float vM, vD;
+  varying vec3 vW;
+  #ifdef CAR_REFL
+    uniform float uStretchRef;
+  #endif
+  void main(){
+    vec3 n = normal;
+    vec3 p = carSpin(n);
+    vec4 wp = modelMatrix * vec4(p, 1.0);
+    #ifdef CAR_REFL
+      wp.y = -wp.y;
+      wp.y *= 1.0 + ${REFL_STRETCH}
+            * clamp(max(-wp.y, 0.0) / uStretchRef, 0.0, 1.0);
+    #endif
+    vW = wp.xyz; vM = aMat;
+    vec4 mv = viewMatrix * wp;
+    vD = -mv.z;
+    /* Pull the line a hair along the view ray so it wins the depth test
+       against the panel it traces. A UNIFORM scale of the view-space
+       position moves the point straight toward the eye, so the
+       perspective divide cancels it and the pixel does not move — only
+       its depth does, and by a margin that grows with distance exactly
+       as depth precision loses it. */
+    mv.xyz *= 0.9985;
+    gl_Position = projectionMatrix * mv;
+  }`;
+const carWireFrag = /* glsl */`
+  varying float vM, vD;
+  varying vec3 vW;
+  uniform vec3 uNeon, uFogColor;
+  uniform float uFogNear, uFogFar, uLights, uHeadOn, uOp;
+  #ifdef CAR_REFL
+    uniform float uHueR, uFadeK;
+    ${CAR_HUE_GLSL}
+  #endif
+  void main(){
+    vec3 c = uNeon * 1.35;
+    if (vM > 3.5 && vM < 4.5) c = vec3(1.0, 0.16, 0.20) * (0.6 + 1.7 * uLights);
+    else if (vM > 4.5 && vM < 5.5)
+      // down, the lid is bodywork, so its outline is an ordinary panel
+      // line rather than a lamp — same crossfade the solid pass uses
+      c = mix(uNeon * 1.35,
+              vec3(1.0, 0.96, 0.86) * (0.18 + 1.7 * uLights), uHeadOn);
+    else if (vM > 8.5) c = vec3(0.92, 0.92, 0.86);
+    else if (vM > 7.5) c = vec3(1.0, 0.46, 0.06) * (0.5 + 1.1 * uLights);
+    else if (vM > 2.5 && vM < 3.5) c = vec3(0.88, 0.90, 1.0) * 1.15;
+    else if (vM > 0.5 && vM < 1.5) c = mix(uNeon, vec3(1.0), 0.45) * 1.1;
+    c = mix(c, uFogColor, smoothstep(uFogNear, uFogFar, vD));
+    float a = uOp;
+    #ifdef CAR_REFL
+      if (vW.y > 0.0) discard;
+      if (uHueR != 0.0) c = carHueRot(c, uHueR);
+      a *= 1.0 - smoothstep(0.0, uFadeK, -vW.y);
+      if (a < 0.004) discard;
+    #endif
+    gl_FragColor = vec4(c, a);
+  }`;
+const carWireMat = new THREE.ShaderMaterial({
+  fog: false, transparent: true, depthWrite: false,
+  uniforms: {
+    uNeon:     carMat.uniforms.uNeon,
+    uFogColor: gridMat.uniforms.uFogColor,
+    uFogNear:  gridMat.uniforms.uFogNear,
+    uFogFar:   gridMat.uniforms.uFogFar,
+    uLights:   carMat.uniforms.uLights,
+    uHeadOn:   carMat.uniforms.uHeadOn,
+    uWheelF:   carMat.uniforms.uWheelF,
+    uWheelR:   carMat.uniforms.uWheelR,
+    uPopAng:   carMat.uniforms.uPopAng,
+    uOp:      { value: 0.95 },
+  },
+  vertexShader: carWireVert, fragmentShader: carWireFrag,
+});
+const carWireReflMat = new THREE.ShaderMaterial({
+  fog: false, transparent: true, depthTest: false, depthWrite: false,
+  defines: { CAR_REFL: 1 },
+  uniforms: Object.assign({}, carWireMat.uniforms, {
+    uOp:         { value: 0.4 },
+    uHueR:       carReflMat.uniforms.uHueR,
+    uFadeK:      carReflMat.uniforms.uFadeK,
+    uStretchRef: carReflMat.uniforms.uStretchRef,
+  }),
+  vertexShader: carWireVert, fragmentShader: carWireFrag,
+});
+
+/* Contact shadow + underglow + speed streaks, in ONE quad. Nothing sells
+   "standing on the road" like the ground going dark directly under the
+   car, and the neon spill and the tarmac smearing past are the same
+   pass, so none of the three costs a draw call of its own.
+   Normal blending with a premultiplied-style colour: black where only
+   the shadow is present, HDR neon where only the glow is.
+
+   Everything here is measured in WORLD units off the car's own
+   footprint, never in quad UVs. The quad grows when the streaks are
+   switched on, and a falloff written against UVs would change width
+   with it — the underglow would get wider every time you raised the
+   speed slider.                                                       */
+/* A car is not a rectangle. This one is 1.26 m across the bonnet and
+   2.00 m across the rear flares, so a box around its bounding size
+   lights a rug on the floor — which is exactly what a rectangular
+   footprint looked like. Scan the built mesh into a plan profile
+   instead: 64 bins along the length, each holding the widest the body
+   gets there, and let the ground shader look the half-width up per
+   fragment. Model-agnostic — the next car brings its own silhouette —
+   for one texture fetch and 256 bytes.                                */
+function carPlanTexture(geo, halfW){
+  const N = 64, bins = new Float32Array(N);
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, z1 = bb.max.z, span = bb.max.z - bb.min.z;
+  const p = geo.getAttribute('position');
+  // bin 0 is the NOSE, matching the shader's 0 = nose, 1 = tail
+  const bin = z => Math.min(N - 1, Math.max(0,
+    Math.floor((z1 - z) / span * N)));
+  /* Rasterise TRIANGLES, not vertices. The loft carries 18 stations over
+     4.2 m, so binning vertices leaves most of 64 bins empty and the
+     outline collapses to zero between them — a glow that pinched to a
+     point twice down the length of the car, which is worse than the
+     rectangle it replaced. A triangle covers every bin its z range
+     spans, and the skin is continuous, so nothing is left unwritten. */
+  for (let i = 0; i < p.count; i += 3){
+    let zLo = Infinity, zHi = -Infinity, mx = 0;
+    for (let k = 0; k < 3; k++){
+      const z = p.getZ(i + k), ax = Math.abs(p.getX(i + k));
+      if (z < zLo) zLo = z;
+      if (z > zHi) zHi = z;
+      if (ax > mx) mx = ax;
+    }
+    for (let b = bin(zHi); b <= bin(zLo); b++) if (mx > bins[b]) bins[b] = mx;
+  }
+  const out = new Uint8Array(N * 4);
+  for (let i = 0; i < N; i++){
+    /* clamped to the body's own half-width: the door mirrors are the
+       one thing outboard of the flares and they would otherwise punch a
+       bulge through the outline. Smoothed, because a per-bin max over a
+       point cloud is noisy where a station happens to fall.          */
+    const a = Math.min(bins[Math.max(i - 1, 0)], halfW);
+    const c = Math.min(bins[Math.min(i + 1, N - 1)], halfW);
+    const m = Math.min(bins[i], halfW);
+    const v = Math.round(Math.min((a + 2 * m + c) * 0.25 / halfW, 1) * 255);
+    out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = v;
+    out[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(out, N, 1);
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const carShadowMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, fog: false,
+  uniforms: {
+    uNeon:   carMat.uniforms.uNeon,
+    uShadow: { value: 0.7 },
+    uGlowA:  { value: 0.35 },
+    uPlan:   { value: null },     // half-width along the car, nose -> tail
+    uQuad:   { value: new THREE.Vector2(1, 1) },  // quad half extents
+    uHalf:   { value: new THREE.Vector2(1, 1) },  // body half extents
+    uCtr:    { value: 0 },        // body centre, rearward of the quad's
+    uPad:    { value: 1 },        // one car half-width — the unit below
+    uSpeed:  { value: 0 },        // drives the airborne streaks
+    uSkid:   { value: 0 },
+    uScroll: { value: 0 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main(){ vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    varying vec2 vUv;
+    uniform vec3 uNeon;
+    uniform sampler2D uPlan;
+    uniform float uShadow, uGlowA, uCtr, uPad;
+    uniform vec2 uQuad, uHalf;
+    #ifdef CAR_SKID
+      uniform float uSkid, uScroll;
+    #endif
+    void main(){
+      // + y is REARWARD of the quad's centre; the body sits at uCtr
+      vec2 w = (vUv * 2.0 - 1.0) * uQuad;
+      w.y -= uCtr;
+      /* Signed distance to the car's PLAN OUTLINE, not to a box around
+         it: the half-width is looked up along the length, so the glow
+         pinches in over the bonnet and swells over the rear flares the
+         way the bodywork does. */
+      float t = clamp((w.y + uHalf.y) / (2.0 * uHalf.y), 0.0, 1.0);
+      float hx = texture2D(uPlan, vec2(t, 0.5)).r * uHalf.x;
+      vec2 dd = vec2(abs(w.x) - hx, abs(w.y) - uHalf.y);
+      float sd = length(max(dd, 0.0)) + min(max(dd.x, dd.y), 0.0);
+
+      /* Contact shadow: a soft pool, darkest under the middle and
+         already fading by the sills. The old one held one flat alpha
+         across the whole footprint, which in wireframe mode painted an
+         opaque slab exactly where the car is meant to be see-through. */
+      float sh = uShadow * 0.60
+               * (1.0 - smoothstep(-0.85 * uPad, 0.42 * uPad, sd));
+
+      /* Underglow: strip lighting along the sills, spilling onto the road
+         and dying within a third of a half-width. Deliberately soft the
+         whole way rather than a crisp rim on the outline — light off a
+         diffuser scatters, and a hard edge traced round the body reads
+         as a painted line rather than as something glowing. The mottle
+         is what stops the spill looking like an airbrushed gradient;
+         it is cheap and it only ever varies the brightness, never the
+         extent, so the shape still follows the plan exactly. */
+      float mot = 0.80 + 0.20 * sin(w.x * (5.1 / uPad))
+                             * sin(w.y * (3.7 / uPad) + 1.3);
+      float spill = 1.0 - smoothstep(-0.06 * uPad, 0.30 * uPad, sd);
+      float under = 0.34 + 0.66 * smoothstep(-0.40 * uPad, -0.02 * uPad, sd);
+      float g  = spill * under * mot;
+      /* CUBED, not squared. At a square the mid-tones stay high enough
+         that the spill reads as a solid band of colour laid on the road
+         rather than as light falling on it; the extra power pulls
+         everything but the brightest edge down into haze without moving
+         where the effect stops. */
+      float gw = g * g * g * uGlowA;
+
+      #ifdef CAR_SKID
+        /* Tyre marks. Dark, so they add to the SHADOW term rather than
+           the neon one and simply darken the tarmac. The track wanders:
+           three sines whose periods all divide the scroll wrap, so the
+           wander is continuous over the whole run and still seamless
+           when the accumulator rolls over at 1. Everything is a function
+           of the ROAD coordinate, not of distance behind the car, so a
+           mark stays with the tarmac it was laid on. */
+        float behind = w.y - uHalf.y;              // 0 at the tail
+        float bp = max(behind, 0.0);
+        float p = behind / (4.0 * uPad) - uScroll;
+        /* Enough wander to say "laid by a moving car", not enough to
+           squiggle. A tyre tracks; it does not meander. */
+        float wob = 0.020 * sin(6.2832 * p)
+                  + 0.010 * sin(18.850 * p + 1.3)
+                  + 0.005 * sin(31.416 * p + 2.7);
+        float off = abs(w.x) / uHalf.x - (0.80 + wob);   // signed, so the
+        float dl  = abs(off);                            // grooves run true
+        /* A flat core with a short shoulder, not a bell — rubber has an
+           edge to it, and a Gaussian read as a blurred shadow.
+           The grooves are keyed to the SIGNED offset. Keying them to the
+           distance instead, which is the obvious thing to write, wraps
+           them round the wandering centreline and lays the mark out as a
+           chain of nested chevrons — tread, but stamped sideways. */
+        float core   = 1.0 - smoothstep(0.090, 0.150, dl);
+        float groove = 1.0 - 0.18 * (0.5 + 0.5 * cos(off * 63.0));
+        /* Barely patchy, and no high-frequency grain at all: at ten
+           cycles over the run it chopped each mark into a chain of
+           beads rather than reading as texture. A tyre tracks. */
+        float patchy = 0.80 + 0.20 * (0.5 + 0.5 * sin(12.566 * p + 0.7)
+                                              * sin(25.133 * p + 2.1));
+        float fade = smoothstep(-0.95 * uPad, -0.20 * uPad, behind)
+                   * (1.0 - smoothstep(0.0, 5.5 * uPad, bp));
+        sh += uSkid * core * groove * patchy * fade * 1.35;
+      #endif
+
+      float a = clamp(sh + gw, 0.0, 1.0);
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(uNeon * (gw / max(a, 1e-4)) * 1.5, a);
+    }`
+});
+
+/* Airborne streaks — the air going past, not just the floor. The ground
+   pass alone puts every motion cue down at the contact patches, and from
+   a chase view that is the most foreshortened place on screen.
+   Heads are scattered in a ring AROUND the car's cross-section so they
+   graze the flanks and the roof rather than skewer the body, and each
+   one flies rearward on its own phase, stretching with speed and
+   collapsing to nothing at zero. Lines, never additive quads — a bright
+   alpha-blended line over a dark scene reads the same on every GPU.
+   One draw call, 96 segments, and none of it exists until the effect is
+   switched on.                                                         */
+const CAR_STREAKS = 96;
+function buildStreakGeo(halfW, height){
+  const P = [], A = [];
+  let s = 20221 >>> 0;                       // fixed seed: same car twice
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < CAR_STREAKS; i++){
+    /* Hugging the body. Scattered even a little wide, a streak reads as
+       a mark hanging in empty air beside the car rather than as air
+       coming OFF it — the effect only works while they look attached.
+       So: a thin shell just outside the silhouette, never further out
+       than a fifth of a half-width. */
+    /* The ring is one cross-section for the whole run, but the car is a
+       wedge — the roof is only roof over the cabin, and 1.17 m up at the
+       nose is empty sky. So the top of the ring sits well under the roof
+       line; sideways there is bodywork the whole length and it can stay
+       out at the flanks. */
+    const a = rnd() * Math.PI * 2, v = rnd();
+    const x = Math.cos(a) * halfW * (0.88 + 0.16 * v);
+    const y = Math.min(Math.max(
+      height * 0.40 + Math.sin(a) * height * (0.30 + 0.12 * v), 0.05),
+      height * 0.82);
+    const phase = rnd(), lenS = 0.45 + rnd() * 0.95;
+    // per-streak boldness, so the run has weight in it rather than 96
+    // identical hairlines
+    const bold = 0.35 + rnd() * 0.65;
+    for (const end of [0, 1]){ P.push(x, y, 0); A.push(phase, lenS, end, bold); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('aStk',     new THREE.Float32BufferAttribute(A, 4));
+  g.computeBoundingSphere();
+  return g;
+}
+const carStreakMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, fog: false,
+  uniforms: {
+    uNeon:    carMat.uniforms.uNeon,          // the SAME uniform objects
+    uSpeed:   carShadowMat.uniforms.uSpeed,
+    uScrollA: { value: 0 },
+    uSpan:    { value: 20 },                  // metres of run, car-local
+    uStart:   { value: -6 },
+    uLen:     { value: 2.3 },
+  },
+  vertexShader: /* glsl */`
+    attribute vec4 aStk;      // phase, length scale, 0 = head 1 = tail, bold
+    uniform float uSpeed, uScrollA, uSpan, uStart, uLen;
+    varying float vA;
+    void main(){
+      float e = fract(aStk.x + uScrollA);
+      vec3 p = position;                       // x, y carry the scatter
+      p.z = -(uStart + e * uSpan + aStk.z * uLen * aStk.y * uSpeed);
+      /* compact support at both ends of the run: a streak never pops
+         into or out of existence at full brightness */
+      vA = uSpeed * aStk.w * (1.0 - aStk.z * 0.80)
+         * smoothstep(0.0, 0.10, e) * (1.0 - smoothstep(0.45, 0.90, e));
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      /* And killed off near the lens. The run trails toward the camera,
+         so with the car parked close the far end of it ends up a couple
+         of units from the eye, where perspective smears one streak clean
+         across the sky and it reads as a scratch on the screen. Fading
+         on view depth handles every distance and size setting at once,
+         which clamping the run length alone cannot. */
+      vA *= smoothstep(4.0, 13.0, -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uNeon;
+    varying float vA;
+    void main(){
+      if (vA < 0.004) discard;
+      gl_FragColor = vec4(uNeon * 1.7, min(vA * 1.05, 1.0));
+    }`,
+});
+
+/* carRoot carries the body (and its mirror, as a child so both share one
+   world matrix). carGround stays flat on the tarmac while the body bobs
+   on its springs, which is the whole point of keeping them apart.      */
+const carRoot = new THREE.Group();
+const carGround = new THREE.Group();
+// yaw · pitch · roll, in that order — pitch and roll are about the car's
+// own axes, which is not what the default XYZ order would give
+carRoot.rotation.order = 'YXZ';
+carRoot.visible = carGround.visible = false;
+scene.add(carRoot); scene.add(carGround);
+
+let carGeo = null, carModelId = '', carSolid = null, carWire = null,
+    carSolidRefl = null, carWireRefl = null, carShadow = null,
+    carStreaks = null, carPlanTex = null;
+let carLen = 4.16, carHalfW = 1.06, carHeight = 1.26;   // metres, per model
+
+/** Build (once) the geometry for the selected model. */
+function buildCar(){
+  const id = state.car.model in CAR_MODELS ? state.car.model : 'lambo';
+  if (carGeo && carModelId === id) return;
+  const m = CAR_MODELS[id];
+  if (carGeo){
+    carGeo.solid.dispose(); carGeo.wire.dispose();
+    for (const o of [carSolid, carWire, carSolidRefl, carWireRefl, carStreaks])
+      if (o && o.parent) o.parent.remove(o);
+    if (carStreaks) carStreaks.geometry.dispose();
+    carStreaks = null;
+    if (carPlanTex) carPlanTex.dispose();
+  }
+  carModelId = id;
+  carGeo = m.build();
+  carLen = m.len; carHalfW = m.halfW; carHeight = m.height;
+  carPlanTex = carPlanTexture(carGeo.solid, carHalfW);
+  carShadowMat.uniforms.uPlan.value = carPlanTex;
+  const mk = (Cls, geo, mat, refl) => {
+    const o = new Cls(geo, mat);
+    o.frustumCulled = !refl;      // the mirror is built in the vertex stage
+    carRoot.add(o);
+    return o;
+  };
+  carSolid     = mk(THREE.Mesh, carGeo.solid, carMat, false);
+  carSolidRefl = mk(THREE.Mesh, carGeo.solid, carReflMat, true);
+  carWire      = mk(THREE.LineSegments, carGeo.wire, carWireMat, false);
+  carWireRefl  = mk(THREE.LineSegments, carGeo.wire, carWireReflMat, true);
+  // reflection under the body, both under the car itself
+  carSolidRefl.renderOrder = 1; carWireRefl.renderOrder = 2;
+  carWire.renderOrder = 3;
+  if (!carShadow){
+    const g = new THREE.PlaneGeometry(1, 1);
+    g.rotateX(-Math.PI / 2);
+    carShadow = new THREE.Mesh(g, carShadowMat);
+    carShadow.renderOrder = 0;
+    carGround.add(carShadow);
+  }
+  carStreaks = new THREE.LineSegments(
+    buildStreakGeo(carHalfW, carHeight), carStreakMat);
+  carStreaks.frustumCulled = false;      // the run is built in the vertex stage
+  carStreaks.renderOrder = 4;
+  carGround.add(carStreaks);
+}
+
+/* JS twin of the shader's roadCx(): where the tarmac's centre line is at
+   a world z. The car has to stand on the road the floor actually paints,
+   so this must never drift from GLSL_ROADC above.                      */
+function roadCenterX(z){
+  const r = state.road;
+  if (!r.on) return 0;
+  const s = clamp((-z - 10) / 400, 0, 1);
+  return r.x + r.curve * s * s;
+}
+/** d(centre)/dz — the road's heading, so the car points down it */
+function roadSlope(z){
+  const r = state.road;
+  if (!r.on) return 0;
+  const t = (-z - 10) / 400;
+  if (t <= 0 || t >= 1) return 0;          // clamped: the centre runs straight
+  return -r.curve * t / 200;
+}
+
+/* ── car, per frame ───────────────────────────────────────────────────
+   Two matrices and six uniforms. No geometry is touched and no group is
+   walked: the wheels and the headlight pods turn in the vertex stage.  */
+let carWF = 0, carWR = 0, carPop = 0;
+function updateCar(T, dt){
+  const c = state.car, A = state.audio;
+  /* Which way the car points follows the world rather than a setting.
+     The floor scrolling toward you means YOU are moving forward, so the
+     car ahead of you is driving away; reverse the scroll and it becomes
+     oncoming traffic. Every motion cue below scales with that same
+     speed, so a stopped road parks the car — wheels still, springs
+     settled — instead of leaving it jiggling on the spot.             */
+  const v = state.grid.speed * 6 + (state.road.on ? state.road.speed * 6 : 0);
+  const away = v >= 0;
+  const spd = Math.abs(v);                        // world units per second
+  const S = M2W * c.size;
+  const z = c.z, slope = roadSlope(z);
+  /* lane is a FRACTION of the carriageway, not a world offset, so the
+     car keeps its lane when the road is widened — and ±1 lands a flank
+     on the kerb rather than half the car in the dirt */
+  const halfRoad = state.road.on ? state.road.width : 7.5;
+  const x = roadCenterX(z)
+          + c.lane * Math.max(halfRoad - carHalfW * S, 0);
+
+  /* The body does not move on its springs at all. An idle sine read as a
+     fault rather than as speed; driving it from the audio then read as
+     hovering, and once that was fixed by turning it into a squat there
+     was nothing left worth having. The car sits on the road.        */
+  const k = Math.min(spd / 7, 1);                 // 0 when parked
+  carRoot.position.set(x, 0, z);
+  carGround.position.set(x, 0.08, z);
+  const yaw = away ? Math.atan2(-slope, -1) : Math.atan2(slope, 1);
+  carRoot.rotation.set(0, yaw,
+    clamp(-slope * k * 0.5, -0.09, 0.09));                  // lean into the bend
+  carGround.rotation.y = yaw;
+
+  /* Speed streaks: the ground pass smears the tarmac past the wheels.
+     Phase is accumulated from real distance travelled and wrapped, so it
+     stays exact over days rather than losing float32 precision, and the
+     whole effect scales off the same road speed everything else does —
+     a stopped road has no streaks at all.                             */
+  /* ADDITIVE, not a multiplier on the slider. Scaling it meant a scene
+     with the slider at 0 could map the band to anything it liked and
+     still get nothing, because zero times a boost is zero — the mapping
+     silently did nothing, which is the last thing an audio control
+     should do. Audio can now raise the effect from a standing start. */
+  const mo = bandVal(A.mCarMotion) * (A.mCarMotion.boost ?? 1);
+  const su = carShadowMat.uniforms;
+  const road = Math.min(spd / 9, 1);
+  su.uSpeed.value = (c.motion + mo * 1.4) * road;
+  su.uSkid.value  = c.skid * road;
+  if (spd > 1e-4 && dt > 0){
+    /* Two accumulators, because the road pattern and the air run are
+       different lengths and both wrap at 1 — sharing one and scaling it
+       would tear every time the shared value wrapped.                 */
+    su.uScroll.value = (su.uScroll.value + spd * dt / (4.0 * su.uPad.value)) % 1;
+    const st = carStreakMat.uniforms;
+    st.uScrollA.value =
+      (st.uScrollA.value + (spd * dt / S) / st.uSpan.value) % 1;
+  }
+
+  /* wheels: angle = distance / radius, so both axles agree with the road
+     under them. They wrap at 2π separately — a single shared accumulator
+     could not, because the two radii are not commensurate.            */
+  if (spd > 1e-4 && dt > 0){
+    const d = spd * dt / S;                       // metres of tarmac
+    carWF = (carWF + d / 0.303) % (Math.PI * 2);
+    carWR = (carWR + d / 0.311) % (Math.PI * 2);
+    carMat.uniforms.uWheelF.value = carWF;
+    carMat.uniforms.uWheelR.value = carWR;
+  }
+  /* pop-ups rise only for oncoming traffic — the one time a lit lens
+     points anywhere near the camera. Driving away, the flush wedge is
+     the better silhouette anyway.                                     */
+  const popT = (!away && c.lights > 0.01) ? 1 : 0;
+  if (Math.abs(carPop - popT) > 0.0005){
+    carPop += (popT - carPop) * Math.min(dt * 3.5, 1);
+    carMat.uniforms.uPopAng.value = carPop;
+    carMat.uniforms.uHeadOn.value = carPop;
+  }
+  // lamps and underglow flare on the beat, on top of the sliders
+  const gl = bandVal(A.mCarGlow) * (A.mCarGlow.boost ?? 1);
+  carMat.uniforms.uLights.value = c.lights * (1 + gl * 1.4);
+  carShadowMat.uniforms.uGlowA.value = c.glow * (1 + gl * 1.6);
 }
 
 /* — floating neon / chrome text (canvas-rendered, system fonts only) — */
@@ -3798,32 +4994,32 @@ function genPalette(rng, dark){
 const MOODS = {
   any:    { palIdx: null, sun: [['sun',.55],['planet',.25],['wire',.2]],
             speed:[0.5,1.6], sway:[0.2,0.8],
-            hero: [['none',.56],['palms',.16],['obj',.12],['text',.07],['beams',.05],['rain',.04]],
+            extra:[['none',.56],['palms',.16],['car',.12],['text',.07],['beams',.05],['rain',.04]],
             horiz:[['mountains',.5],['city',.19],['sea',.19],['off',.12]],
             cloud:.4, rainAmt:[.4,.7], vhs:.15 },
   calm:   { palIdx: [0,3,4,7], sun: [['sun',.3],['planet',.35],['wire',.35]],
             speed:[0.25,0.7], sway:[0.1,0.45],
-            hero: [['none',.7],['palms',.15],['obj',.03],['text',.06],['beams',.02],['rain',.04]],
+            extra:[['none',.7],['palms',.15],['car',.03],['text',.06],['beams',.02],['rain',.04]],
             horiz:[['mountains',.35],['sea',.38],['city',.1],['off',.17]],
             cloud:.35, rainAmt:[.3,.5], vhs:.05 },
   drive:  { palIdx: [1,2,5,6], sun: [['sun',.75],['planet',.15],['wire',.1]],
             speed:[1.2,2.2], sway:[0.25,0.6],
-            hero: [['none',.4],['palms',.12],['obj',.3],['text',.08],['beams',.06],['rain',.04]],
+            extra:[['none',.4],['palms',.12],['car',.3],['text',.08],['beams',.06],['rain',.04]],
             horiz:[['mountains',.45],['city',.35],['sea',.08],['off',.12]],
             cloud:.25, rainAmt:[.4,.6], vhs:.2 },
   dreamy: { palIdx: [3,7,0], sun: [['sun',.25],['planet',.55],['wire',.2]],
             speed:[0.3,0.8], sway:[0.4,1.0],
-            hero: [['none',.5],['palms',.12],['obj',.05],['text',.25],['beams',.04],['rain',.04]],
+            extra:[['none',.5],['palms',.12],['car',.05],['text',.25],['beams',.04],['rain',.04]],
             horiz:[['sea',.35],['mountains',.28],['city',.15],['off',.22]],
             cloud:.55, rainAmt:[.3,.5], vhs:.1 },
   storm:  { palIdx: [4,5,2], sun: [['sun',.4],['planet',.2],['wire',.4]],
             speed:[0.8,1.8], sway:[0.3,0.8],
-            hero: [['none',.3],['palms',.05],['obj',.05],['text',.05],['beams',.15],['rain',.4]],
+            extra:[['none',.3],['palms',.05],['car',.05],['text',.05],['beams',.15],['rain',.4]],
             horiz:[['mountains',.42],['sea',.28],['city',.18],['off',.12]],
             cloud:.85, rainAmt:[.6,.95], vhs:.45 },
   noir:   { palIdx: [4], sun: [['sun',.3],['planet',.25],['wire',.45]],
             speed:[0.25,0.6], sway:[0.1,0.4],
-            hero: [['none',.62],['palms',.14],['obj',.04],['text',.08],['beams',.04],['rain',.08]],
+            extra:[['none',.62],['palms',.14],['car',.04],['text',.08],['beams',.04],['rain',.08]],
             horiz:[['city',.45],['mountains',.28],['off',.17],['sea',.1]],
             cloud:.6, rainAmt:[.3,.6], vhs:.2 },
 };
@@ -3979,32 +5175,50 @@ function generateScene(seed, mood){
   s.clouds.size = R.range(rng, 0.8, mood === 'dreamy' ? 2.2 : 1.6);
   s.clouds.near = R.chance(rng, 0.3) ? R.range(rng, 0.2, 0.6) : 0;
 
-  /* extras — AT MOST ONE hero element on stage */
-  const hero = R.weighted(rng, M.hero);
-  if (hero === 'palms'){ s.fx.palms = true; s.fx.palmCount = R.int(rng, 3, 6);
+  /* extras — AT MOST ONE focal element on stage. The car is only in the
+     running when there is a road for it to be on: parked on bare grid it
+     reads as a prop rather than as traffic, so it is filtered out of the
+     draw rather than given a lower weight.                             */
+  const pool = M.extra.filter(([k]) => k !== 'car' || s.road.on);
+  const focus = R.weighted(rng, pool);
+  if (focus === 'palms'){ s.fx.palms = true; s.fx.palmCount = R.int(rng, 3, 6);
     s.fx.palmSway = R.range(rng, 0.15, 0.6);
     s.fx.palmSeed = R.int(rng, 1, 9999);
     s.fx.palmHalo = R.chance(rng, 0.3) ? R.range(rng, 0.1, 0.45) : 0; }
-  else if (hero === 'obj'){
-    s.fx.hero = mood === 'drive' && R.chance(rng, 0.6)
-      ? 'car' : R.pick(rng, ['pyramid', 'sphere', 'torus', 'car']);
-    s.fx.heroSpin = R.range(rng, 0.15, 0.6);
+  else if (focus === 'car'){
+    s.car.on = true;
+    s.car.neon = pal.accent;
+    // usually a lane over, occasionally straddling the middle of the shot
+    s.car.lane = R.chance(rng, 0.8)
+      ? R.pick(rng, [-1, 1]) * R.range(rng, 0.3, 0.62) : R.range(rng, -0.15, 0.15);
+    s.car.z = R.range(rng, -105, -18);
+    s.car.wing = R.chance(rng, 0.75);
+    s.car.style = R.weighted(rng, [['both',.55],['solid',.3],['wire',.15]]);
+    s.car.body = R.chance(rng, 0.55) ? pal.mtn[0]
+      : R.pick(rng, ['#2a0d46', '#0d0a1e', '#43060f', '#e8e2d8', '#12213d']);
+    s.car.lights = R.range(rng, 0.7, 1.8);
+    s.car.glow = R.chance(rng, 0.5) ? R.range(rng, 0.15, 0.8) : 0;
+    s.car.motion = R.chance(rng, 0.75) ? R.range(rng, 0.4, 1.2) : 0;
+    s.car.skid = R.chance(rng, 0.55) ? R.range(rng, 0.3, 1.0) : 0;
+    s.car.shadow = R.range(rng, 0.55, 0.85);
+    // a car wants somewhere to drive to: keep the floor moving
+    if (Math.abs(s.grid.speed) < 0.5) s.grid.speed = R.range(rng, 0.9, 2.0);
   }
-  else if (hero === 'text'){
+  else if (focus === 'text'){
     s.fx.text = true;
     s.fx.textStr = R.pick(rng, TEXT_POOL);
     s.fx.textStyle = R.weighted(rng, [['chrome',.5],['neon',.35],['outline',.15]]);
   }
-  else if (hero === 'beams'){
+  else if (focus === 'beams'){
     s.fx.beams = true;
     s.fx.beamLen = R.range(rng, 0.8, 1.3);
     s.fx.beamWidth = R.range(rng, 0.8, 1.4);
   }
-  else if (hero === 'rain'){
+  else if (focus === 'rain'){
     s.fx.weather = mood === 'storm' && R.chance(rng, 0.6) ? 'storm' : 'rain';
     s.fx.rainAmt = R.range(rng, M.rainAmt[0], M.rainAmt[1]);
   }
-  /* weather as ambience, independent of the hero pick */
+  /* weather as ambience, independent of the focal pick */
   if (mood === 'storm' && s.fx.weather === 'none' && R.chance(rng, 0.6))
     s.fx.weather = R.chance(rng, 0.5) ? 'storm' : 'rain';
   if (mood === 'noir' && s.fx.weather === 'none' && R.chance(rng, 0.3))
@@ -4116,6 +5330,7 @@ function applySun(){
   wireMat.uniforms.uC3.value.set(s.c3);
   layoutSun();
   syncReflection();
+  applyCar();                       // the sun is the car's key light
 }
 const _white = new THREE.Color(1, 1, 1);
 /* Shader permutation: a reflection source with its slider at zero is
@@ -4232,6 +5447,7 @@ function applyGrid(){
   gridMat.uniforms.uTerrNear.value = g.terrNear - 12;  // 0 = right up close
   gridMat.uniforms.uRefHue.value = g.reflectHue * Math.PI / 180;
   syncReflection();
+  applyCar();                       // the car's mirror rides the same sliders
 }
 function applyRoad(){
   const r = state.road, u = gridMat.uniforms;
@@ -4265,6 +5481,7 @@ function applyRoad(){
   u.uDashDuty.value = r.dashDuty;
   u.uRoadGlow.value = r.glow;
   syncReflDefines();
+  applyCar();            // lane width and tarmac colour both come from here
   needsRender = true;
 }
 function applyMtn(){
@@ -4309,9 +5526,8 @@ function applyClouds(){
   skyMat.uniforms.uHaze.value = c.haze;
   syncHorizon();                    // haze feeds the horizon-seam blend too
 }
-let _lastPalms = '', _lastHero = '', _lastText = '';
-const _heroBase = new THREE.Color(0x00e5ff);   // hero color pre-brightness
-let _heroMul = 1, _textMul = 1;                // custom-bloom multipliers
+let _lastPalms = '', _lastText = '';
+let _textMul = 1;                              // custom-bloom multiplier
 function applyFx(){
   const f = state.fx;
   const palmKey = `${f.palms}|${f.palmCount}|${f.palmSeed}`;
@@ -4329,15 +5545,9 @@ function applyFx(){
   gridMat.uniforms.uPalmSway.value = f.palmSway;
   gridMat.uniforms.uBeamN.value = f.beams ? beams.length : 0;
   syncReflDefines();               // palms/beams gate the scene permutation
-  if (f.hero !== _lastHero){ _lastHero = f.hero; rebuildHero(); }
   // custom bloom = brightness multiplier that pushes the object past the
   // bloom threshold on its own; off = follow the global bloom settings
-  _heroBase.set(f.heroColor);
-  _heroMul = f.heroBloomOn ? 0.3 + f.heroBloom * 1.7 : 1;
   _textMul = f.textBloomOn ? 0.35 + f.textBloom * 1.65 : 1;
-  heroMat.color.copy(_heroBase).multiplyScalar(_heroMul);
-  heroGroup.scale.setScalar(f.heroSize);
-  heroGroup.position.set(f.heroX, f.heroY, f.heroZ);
   textMesh.visible = f.text;
   textMesh.position.set(f.textX, f.textY, -310);
   const textKey = `${f.textStr}|${f.textStyle}|${f.textColor}`;
@@ -4353,6 +5563,93 @@ function applyFx(){
   // no beams → nothing for the water to glint off
   seaMat.uniforms.uGlintBeam.value = f.beams ? state.mtn.glintBeam : 0;
 }
+/* Everything the car needs that is not per-frame. Switched off, this
+   returns before a single byte of geometry exists — that is the whole
+   "costs nothing when disabled" contract, and it is why the build is
+   here rather than at startup.                                        */
+function applyCar(){
+  const c = state.car;
+  carRoot.visible = carGround.visible = c.on;
+  if (!c.on) return;
+  buildCar();
+  const wing = c.wing ? Infinity : carGeo.split;
+  carGeo.solid.setDrawRange(0, wing);
+  carGeo.wire.setDrawRange(0, c.wing ? Infinity : carGeo.wireSplit);
+  const u = carMat.uniforms;
+  u.uBody.value.set(c.body);
+  u.uNeon.value.set(c.neon);
+  u.uGround.value.set(state.road.on ? state.road.surface : '#0a0616')
+    .multiplyScalar(1.6);           // the tarmac is what the flanks mirror
+  u.uSunC.value.set(state.sun.c2);
+  u.uSunPos.value.set(state.sun.x * 3.2, Math.max(state.sun.y, 4), SUN_Z);
+  u.uLights.value = c.lights;
+  /* Underglow is a GROUND effect and nothing else. It used to drive the
+     accent rim on the bodywork too, so turning it up lit the car itself
+     and it read as the glow bleeding onto the panels. Fixed at what the
+     default glow used to give, so nothing that already exists changes
+     unless its glow slider was moved. */
+  u.uNeonAmt.value = 0.80;
+  carShadowMat.uniforms.uShadow.value = c.shadow;
+  carShadowMat.uniforms.uGlowA.value = c.glow;
+  /* the reflection rides the same slider as the palms and the skyline —
+     one "scene reflection" control for everything the floor mirrors */
+  const rs = state.grid.reflectScene;
+  const style = c.style;
+  carSolid.visible     = style !== 'wire';
+  carWire.visible      = style !== 'solid';
+  carSolidRefl.visible = style !== 'wire'   && rs > 0.001;
+  carWireRefl.visible  = style !== 'solid'  && rs > 0.001;
+  carWireMat.uniforms.uOp.value = style === 'both' ? 0.5 : 0.95;
+  carReflMat.uniforms.uOp.value = rs * 0.85;
+  carWireReflMat.uniforms.uOp.value = rs * (style === 'both' ? 0.35 : 0.7);
+  carReflMat.uniforms.uHueR.value = state.grid.reflectHue * Math.PI / 180;
+  const S = M2W * c.size;
+  carReflMat.uniforms.uFadeK.value = carHeight * S * 2.4;
+  carReflMat.uniforms.uStretchRef.value =
+    Math.max(473 * REFL_SAT - state.cam.height, 5);   // as the wire moon
+  carRoot.scale.setScalar(S);
+  /* The ground quad grows rearward only when the streaks need somewhere
+     to go, and the streak code is COMPILED OUT when they do not — at
+     zero the effect costs neither the extra fill nor the instructions.
+     Its two configurations put the body in different places inside the
+     quad, which is exactly why the shader measures in world units.    */
+  const hw = carHalfW * S, hl = carLen * 0.5 * S;
+  /* An effect counts as live if its slider is up OR the audio can raise
+     it, because the audio term is additive — deciding on the slider
+     alone would compile out and hide exactly the case where someone maps
+     a band with the slider at zero.                                   */
+  const bandOn = state.audio.on && state.audio.mCarMotion.band !== 'off';
+  const air  = c.motion > 0.001 || bandOn;
+  const skid = c.skid > 0.001;
+  const qw = hw * 1.55, ql = hl * (skid ? 2.6 : 1.8);
+  const off = skid ? -hl : 0;
+  carShadow.scale.set(qw * 2, 1, ql * 2);
+  carShadow.position.z = off;
+  const su = carShadowMat.uniforms;
+  su.uQuad.value.set(qw, ql);
+  su.uHalf.value.set(hw, hl);
+  su.uCtr.value = off;
+  su.uPad.value = hw;
+  if (!!carShadowMat.defines.CAR_SKID !== skid){
+    if (skid) carShadowMat.defines.CAR_SKID = 1;
+    else delete carShadowMat.defines.CAR_SKID;
+    carShadowMat.needsUpdate = true;
+  }
+  /* Airborne streaks live in car metres and are scaled with the body, so
+     the run stays the same number of car lengths at every size. Off, the
+     object leaves the draw list entirely rather than drawing nothing. */
+  carStreaks.visible = air;
+  carStreaks.scale.setScalar(S);
+  const st = carStreakMat.uniforms;
+  st.uSpan.value  = carLen * 1.8;
+  /* The run starts just ahead of the windscreen, not out in front of the
+     car: streaks born further forward sit near the horizon, where
+     perspective stretches them across half the sky and they read as
+     scratches on the glass rather than as air going past. */
+  st.uStart.value = -carLen * 0.20;
+  st.uLen.value   = carLen * 0.60;
+  needsRender = true;
+}
 function applyCam(){
   camera.fov = state.cam.fov;
   camera.updateProjectionMatrix();
@@ -4364,6 +5661,7 @@ function applyCam(){
      wire moon keeps its mirrored geometry stretching in lockstep.     */
   wireReflMat.uniforms.uStretchRef.value =
     Math.max(473 * REFL_SAT - state.cam.height, 5);
+  applyCar();                       // the car's mirror smears to match
   syncSeaExtent();                  // sea extent is angular → camera-dependent
 }
 function applyPost(){
@@ -4409,7 +5707,7 @@ function applyAudio(){
 function applyAnim(){ applyHostFps(); applyRendererSize(); }
 
 const appliers = { sky: applySky, sun: applySun, grid: applyGrid,
-  road: applyRoad, mtn: applyMtn,
+  road: applyRoad, car: applyCar, mtn: applyMtn,
   stars: applyStars, clouds: applyClouds, fx: applyFx, cam: applyCam,
   post: applyPost, audio: applyAudio, anim: applyAnim,
   gen: () => {} };   // hue-shift/-cycle are read live in tick()
@@ -4507,7 +5805,7 @@ const TIPS = {
     + 'bloom pass and they start to glow.',
   'grid.reflect':'Wet-floor mirror of the sun / planet / moon on the grid. 0 switches the effect off entirely.',
   'grid.reflectBeams':'Wet-floor mirror of the light beams. 0 switches it off entirely.',
-  'grid.reflectScene':'Wet-floor mirror of the mountains and palms. 0 switches it off entirely.',
+  'grid.reflectScene':'Wet-floor mirror of the mountains, palms and the car. 0 switches it off entirely.',
   'grid.reflectHue':'Rotates the reflections’ colors away from the originals.',
   'mtn.mode':'What sits on the horizon: mountain ridges, a city skyline, '
     + 'or open water. Only one at a time.',
@@ -4554,16 +5852,35 @@ const TIPS = {
   'fx.palmSeed':'Random seed for palm placement — type a number to reshuffle.',
   'fx.palmHalo':'Constant soft aura around the palms (audio can add more).',
   'fx.palmGlowColor':'Color of the palm aura and audio tint.',
-  'fx.hero':'One wireframe centerpiece object.',
-  'fx.heroColor':'Wireframe color.',
-  'fx.heroSpin':'Rotation speed. 0 = still (use Fixed angle instead).',
-  'fx.heroAngle':'Resting rotation, only used while Spin is 0.',
-  'fx.heroSize':'Object scale.',
-  'fx.heroX':'Horizontal position.',
-  'fx.heroY':'Height above the floor.',
-  'fx.heroZ':'Distance from the camera (more negative = farther).',
-  'fx.heroBloomOn':'Give the object its own bloom level instead of the global one.',
-  'fx.heroBloom':'Object-only bloom strength.',
+  'car.on':'Put a car on the road. Switched off it costs nothing at all — '
+    + 'no geometry is even built until the first time you turn it on.',
+  'car.model':'Which car. More will follow.',
+  'car.style':'Solid bodywork, a glowing wireframe, or both at once.',
+  'car.body':'Paint color. The sky and the tarmac are mirrored in it, so '
+    + 'dark lacquer picks up far more of the scene than a light color does.',
+  'car.neon':'Accent color: the rim light along the bodywork, the wireframe, '
+    + 'and the underglow on the road.',
+  'car.z':'How far ahead of the camera the car is. The top of the range puts '
+    + 'it right in front of the lens; combine with Size for a bonnet shot.',
+  'car.lane':'Where it sits across the road, as a share of the carriageway — '
+    + '0 is the centre line and ±1 puts a flank on the kerb. It stays in its '
+    + 'lane when the road is widened, and follows the bend.',
+  'car.size':'Scale. 1.0 is the real car against the real road.',
+  'car.wing':'The rear wing.',
+  'car.lights':'Brightness of the tail lamps, exhausts and headlights. High '
+    + 'values push them into the bloom pass.',
+  'car.glow':'Underglow: neon spilling onto the road from strips along the '
+    + 'sills, so it follows the body outline rather than pooling in a '
+    + 'circle. It lights the ground only, never the bodywork above it.',
+  'car.motion':'Streaks of light coming off the car in the accent color, '
+    + 'running at the road\'s speed and gone when it stops. This is '
+    + 'what makes it read as driving rather than parked. Audio can raise '
+    + 'it on top of the slider, including from 0.',
+  'car.skid':'Rubber laid down behind the rear tyres, wandering and patchy '
+    + 'the way real marks are, and fading out behind the car. Runs at the '
+    + 'road\'s speed. At 0 it is compiled out and costs nothing.',
+  'car.shadow':'How dark the tarmac goes directly under the car. This is what '
+    + 'makes it sit on the road rather than hover over it.',
   'fx.text':'Floating retro text.',
   'fx.textStr':'The text itself.',
   'fx.textStyle':'Chrome, neon glow, or outline lettering.',
@@ -4637,6 +5954,7 @@ function amap(label, key, opts = {}){
 const RD = s => s.road.on;
 const roadHasDash = s => /dash/i.test(s.road.center)
   || s.road.edge === 'dashed' || s.road.lanes > 1;
+const CR = s => s.car.on;
 
 /* top of the FPS cap slider — shared with the host FPS-limit listener, which
    writes into the same control and must not push it past its own range */
@@ -4761,6 +6079,25 @@ const SCHEMA = [
       { show: RD, dis: s => !roadHasDash(s) }],
     ['rng','Marking glow','road.glow',0,3,0.01,      { show: RD }],
   ]},
+  { id:'car', title:'Car', apply:'car', rows:[
+    ['chk','Car','car.on'],
+    ['sel','Model','car.model',
+      Object.entries(CAR_MODELS).map(([k, v]) => [k, v.name]), { show: CR }],
+    ['sel','Style','car.style',[['both','Solid + wireframe'],
+      ['wire','Neon wireframe'],['solid','Solid']], { show: CR }],
+    ['colr','Body color','car.body',
+      { show: s => s.car.on && s.car.style !== 'wire' }],
+    ['colr','Neon accent','car.neon',               { show: CR }],
+    ['rng','Distance','car.z',-220,6,1,             { show: CR }],
+    ['rng','Lane position','car.lane',-1,1,0.01,    { show: CR }],
+    ['rng','Size','car.size',0.5,2,0.01,            { show: CR }],
+    ['chk','Rear wing','car.wing',                  { show: CR }],
+    ['rng','Lights','car.lights',0,4,0.01,          { show: CR }],
+    ['rng','Underglow','car.glow',0,2,0.01,         { show: CR }],
+    ['rng','Speed streaks','car.motion',0,2,0.01,   { show: CR }],
+    ['rng','Tyre marks','car.skid',0,1.5,0.01,      { show: CR }],
+    ['rng','Ground shadow','car.shadow',0,1,0.01,   { show: CR }],
+  ]},
   { id:'mtn', title:'Horizon', apply:'mtn', rows:[
     ['sel','Type','mtn.mode',[['off','Off'],['mountains','Mountains'],
       ['city','City'],['sea','Sea']]],
@@ -4829,21 +6166,6 @@ const SCHEMA = [
       { show: s => s.fx.palms, dis: s => s.fx.palmHalo === 0
           && s.audio.mPalmHalo.band === 'off'
           && s.audio.mPalms.band === 'off' }],
-  ]},
-  { id:'fxHero', title:'Hero object', apply:'fx', group:'Extras', rows:[
-    ['sel','Hero object','fx.hero',[['none','none'],['pyramid','Pyramid'],
-      ['sphere','Sphere'],['torus','Torus'],['car','Car']]],
-    ['colr','Object color','fx.heroColor',      { show: s => s.fx.hero !== 'none' }],
-    ['rng','Spin','fx.heroSpin',0,1.5,0.01,     { show: s => s.fx.hero !== 'none' }],
-    ['rng','Fixed angle','fx.heroAngle',0,360,1,
-      { show: s => s.fx.hero !== 'none', dis: s => s.fx.heroSpin > 0.001 }],
-    ['rng','Object size','fx.heroSize',0.4,2,0.05,{ show: s => s.fx.hero !== 'none' }],
-    ['rng','Object X','fx.heroX',-120,120,1,    { show: s => s.fx.hero !== 'none' }],
-    ['rng','Object height','fx.heroY',2,90,1,   { show: s => s.fx.hero !== 'none' }],
-    ['rng','Object distance','fx.heroZ',-260,-25,1,{ show: s => s.fx.hero !== 'none' }],
-    ['chk','Custom bloom','fx.heroBloomOn',     { show: s => s.fx.hero !== 'none' }],
-    ['rng','Object bloom','fx.heroBloom',0,2,0.01,
-      { show: s => s.fx.hero !== 'none' && s.fx.heroBloomOn }],
   ]},
   { id:'fxText', title:'Neon text', apply:'fx', group:'Extras', rows:[
     ['chk','Neon text','fx.text'],
@@ -4954,10 +6276,10 @@ const SCHEMA = [
   { id:'auCam', title:'Camera', apply:'audio', group:'audiofx', rows:[
     ...amap('FOV punch','mFov'),
   ]},
-  { id:'auHero', title:'Hero object', apply:'audio', group:'audiofx',
-    show: s => s.fx.hero !== 'none', rows:[
-    ...amap('Scale','mHero'),
-    ...amap('Glow','mHeroGlow'),
+  { id:'auCar', title:'Car', apply:'audio', group:'audiofx',
+    show: s => s.car.on, rows:[
+    ...amap('Lights · underglow','mCarGlow',{ boost:true }),
+    ...amap('Speed streaks','mCarMotion',{ boost:true }),
   ]},
   { id:'auText', title:'Neon text', apply:'audio', group:'audiofx',
     show: s => s.fx.text, rows:[
@@ -5139,7 +6461,7 @@ function makeSelect(items, o){
 }
 
 const GROUP_NOTES = {
-  'Extras': 'Best kept to one hero element at a time — the randomizer enforces that.',
+  'Extras': 'Best kept to one focal element at a time — the randomizer enforces that.',
 };
 function buildUI(){
   const host = document.getElementById('sections');
@@ -5523,7 +6845,7 @@ function toggleUI(show = panelHidden){
    ════════════════════════════════════════════════════════════════════ */
 
 function loadState(obj){
-  state = deepMerge(deepClone(DEFAULTS), obj);
+  state = dropDeadKeys(deepMerge(deepClone(DEFAULTS), obj));
   applyAll();
   refreshUI();
   // an imported scene brings its own override switch — the host's limit
@@ -6001,16 +7323,7 @@ function tick(now){
     su2.uSunC3.value.copy(gridMat.uniforms.uSunC3.value);
     su2.uHueR.value = skyMat.uniforms.uHue.value;   // sky drift stays mirrored
   }
-  if (fxs.hero !== 'none'){
-    if (fxs.heroSpin > 0.001) heroGroup.rotation.y += dt * fxs.heroSpin;
-    else heroGroup.rotation.y = fxs.heroAngle * Math.PI / 180;
-    heroGroup.position.y = fxs.heroY + Math.sin(T * 0.7) * 0.9;
-    heroGroup.scale.setScalar(
-      fxs.heroSize * (1 + bandVal(state.audio.mHero) * 0.3));
-    // audio glow: brightness on top of the custom-bloom multiplier
-    heroMat.color.copy(_heroBase)
-      .multiplyScalar(_heroMul + bandVal(state.audio.mHeroGlow) * 1.8);
-  }
+  if (state.car.on) updateCar(T, dt);
   if (fxs.text){
     const tv = bandVal(state.audio.mText);
     textMesh.position.y = fxs.textY + Math.sin(T * 0.4) * 1.4;
@@ -6141,7 +7454,7 @@ document.getElementById('presetSel').addEventListener('change', e => {
       if (ls) loaded = JSON.parse(ls);
     } catch {}
   }
-  if (loaded) state = deepMerge(deepClone(DEFAULTS), loaded);
+  if (loaded) state = dropDeadKeys(deepMerge(deepClone(DEFAULTS), loaded));
   if (h.ui === '0' || (isWE && h.ui === undefined)) toggleUI(false);
   applyAll();
   refreshUI();
@@ -6170,6 +7483,11 @@ document.getElementById('presetSel').addEventListener('change', e => {
     gridMat, finalMat, audioEng,   // debug: uniform/band inspection in tests
     wireMoon, wireReflMoon, wireReflRoot, scene, camera, renderer,
     seaMat, cityGroup, mtnGroup,
+    carShadowMat,
+    car: () => ({ root: carRoot, ground: carGround, geo: carGeo,
+                  mat: carMat, wireMat: carWireMat, reflMat: carReflMat,
+                  solid: carSolid, wire: carWire,
+                  solidRefl: carSolidRefl, wireRefl: carWireRefl }),
   };
 })();
 
