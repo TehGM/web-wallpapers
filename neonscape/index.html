@@ -439,7 +439,8 @@ const DEFAULTS = {
   car:   { on:false, model:'lambo', style:'both',
            body:'#2a0d46', neon:'#00e5ff',
            z:-30, lane:0.42, size:1.0, wing:true,
-           lights:1.0, glow:0.35, shadow:0.7, motion:0.6, skid:0.5 },
+           lights:1.0, glow:0.35, shadow:0.7, motion:0.6, skid:0.5,
+           drift:0 },
   mtn:   { mode:'mountains',        // off · mountains · city · sea
            layers:2, height:30, rough:1.0, seed:1234,
            fill:'#0e0426', edge:'#ff2d95', edgeGlow:1.0,
@@ -3419,7 +3420,11 @@ function countachSkin(i, k){
 /** one wheel and its mirror: tyre, sidewall, five-slot Bravo alloy */
 function countachWheels(B, cx, cz, r, hw, rim, spin){
   const SEG = 15;                       // 15 → exactly 5 dark slots
-  const rot = [r, cz, 0, spin];
+  /* aRot.z is the pop-ups' swing angle and unused by a wheel, so the
+     wheel's centreline lives there — the steer needs a pivot and there
+     is no spare attribute. Stored unsigned: polyM hands the mirrored
+     wheel the SAME aRot, so the side is taken from the vertex's own x. */
+  const rot = [r, cz, cx, spin];
   const x0 = cx - hw, x1 = cx + hw;     // inner, outer
   const at = (x, k, rr) => {
     const a = k / SEG * Math.PI * 2;
@@ -3660,7 +3665,13 @@ function buildCountach(){
    any one car's proportions.                                          */
 const CAR_MODELS = {
   lambo: { name: 'Lamborghini', build: buildCountach,
-           len: 4.17, halfW: 1.02, height: 1.17 },
+           len: 4.17, halfW: 1.02, height: 1.17,
+           /* contact patches, car-local metres: [x, z] per corner. The
+              ground pass lays a tyre mark under each of them, and once
+              the car is drifting they stop being two mirrored pairs, so
+              it needs the real four rather than one track figure. */
+           axles: [[0.77, 1.15], [-0.77, 1.15],      // front
+                   [0.80, -1.30], [-0.80, -1.30]] }, // rear
 };
 
 /* ── car materials ────────────────────────────────────────────────────
@@ -3672,8 +3683,8 @@ const CAR_MODELS = {
    undefined in GLSL and renders as black blocks on some drivers.       */
 const CAR_SPIN_GLSL = /* glsl */`
   attribute float aMat;
-  attribute vec4  aRot;          // pivotY, pivotZ, swing, kind
-  uniform float uWheelF, uWheelR, uPopAng;
+  attribute vec4  aRot;          // pivotY, pivotZ, swing | wheel cx, kind
+  uniform float uWheelF, uWheelR, uPopAng, uSteer;
   vec3 carSpin(inout vec3 n){
     vec3 p = position;
     float ang = aRot.w > 2.5 ? uPopAng * aRot.z
@@ -3684,6 +3695,19 @@ const CAR_SPIN_GLSL = /* glsl */`
       vec2 d = p.yz - aRot.xy;
       p.yz = aRot.xy + vec2(d.x * c - d.y * s, d.x * s + d.y * c);
       n.yz = vec2(n.y * c - n.z * s, n.y * s + n.z * c);
+    }
+    /* Opposite lock. Only the FRONT wheels turn, and only about their own
+       vertical axis — after the roll above, so the steer carries the
+       already-rolling wheel round with it. Masked rather than branched:
+       every other vertex gets a rotation of exactly zero, which is the
+       identity, for a handful of instructions and no divergence. */
+    float st = uSteer * step(0.5, aRot.w) * step(aRot.w, 1.5);
+    if (st != 0.0){
+      float c = cos(st), s = sin(st);
+      vec2 piv = vec2(sign(p.x) * aRot.z, aRot.y);
+      vec2 d = p.xz - piv;
+      p.xz = piv + vec2(d.x * c + d.y * s, -d.x * s + d.y * c);
+      n.xz = vec2(n.x * c + n.z * s, -n.x * s + n.z * c);
     }
     return p;
   }`;
@@ -3824,6 +3848,7 @@ const carMat = new THREE.ShaderMaterial({
     uWheelF:  { value: 0 },
     uWheelR:  { value: 0 },
     uPopAng:  { value: 0 },
+    uSteer:   { value: 0 },
   },
   vertexShader: carVert, fragmentShader: carFrag,
 });
@@ -3917,6 +3942,7 @@ const carWireMat = new THREE.ShaderMaterial({
     uWheelF:   carMat.uniforms.uWheelF,
     uWheelR:   carMat.uniforms.uWheelR,
     uPopAng:   carMat.uniforms.uPopAng,
+    uSteer:    carMat.uniforms.uSteer,
     uOp:      { value: 0.95 },
   },
   vertexShader: carWireVert, fragmentShader: carWireFrag,
@@ -4011,6 +4037,9 @@ const carShadowMat = new THREE.ShaderMaterial({
     uSpeed:  { value: 0 },        // drives the airborne streaks
     uSkid:   { value: 0 },
     uScroll: { value: 0 },
+    uTrkX:   { value: new THREE.Vector4(0.78, -0.78, 0.78, -0.78) },
+    uTrkZ:   { value: new THREE.Vector4(0, 0, 0, 0) },
+    uYaw:    { value: new THREE.Vector2(1, 0) },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -4021,21 +4050,51 @@ const carShadowMat = new THREE.ShaderMaterial({
     uniform vec3 uNeon;
     uniform sampler2D uPlan;
     uniform float uShadow, uGlowA, uCtr, uPad;
-    uniform vec2 uQuad, uHalf;
+    uniform vec2 uQuad, uHalf, uYaw;      // uYaw = cos, sin of the drift
     #ifdef CAR_SKID
       uniform float uSkid, uScroll;
+      /* One mark per contact patch. The lateral offsets are NOT mirrored
+         pairs once the car is sideways, so every wheel carries its own
+         line and its own start. */
+      uniform vec4 uTrkX, uTrkZ;
+      float skidMark(float lat, float z0, float xn, float behind, float p){
+        float ph = lat * 4.7;                  // each tyre wanders its own way
+        float wob = 0.020 * sin(6.2832 * p + ph)
+                  + 0.010 * sin(18.850 * p + 1.3 + ph)
+                  + 0.005 * sin(31.416 * p + 2.7);
+        float off = xn - (lat + wob);
+        float dl  = abs(off);
+        float core   = 1.0 - smoothstep(0.090, 0.150, dl);
+        float groove = 1.0 - 0.18 * (0.5 + 0.5 * cos(off * 63.0));
+        float patchy = 0.80 + 0.20 * (0.5 + 0.5 * sin(12.566 * p + 0.7)
+                                              * sin(25.133 * p + 2.1));
+        float b = behind - z0;                 // from THIS wheel, not the tail
+        float fade = smoothstep(-0.15 * uPad, 0.15 * uPad, b)
+                   * (1.0 - smoothstep(0.0, 5.5 * uPad, max(b, 0.0)));
+        return core * groove * patchy * fade;
+      }
     #endif
     void main(){
       // + y is REARWARD of the quad's centre; the body sits at uCtr
       vec2 w = (vUv * 2.0 - 1.0) * uQuad;
       w.y -= uCtr;
+      /* TWO FRAMES in one pass. The shadow and the underglow belong to
+         the BODY — the glow is bolted to the sills and the shadow is
+         cast by the shell — so once the car is drifting they have to
+         yaw with it. The tyre marks belong to the ROAD and must not.
+         Rotating the sample point into the body frame is two multiplies
+         and saves a second quad; leaving both in the road frame drew a
+         car-shaped pool of light pointing down the road while the car
+         itself sat across it. */
+      vec2 wb = vec2( w.x * uYaw.x + w.y * uYaw.y,
+                     -w.x * uYaw.y + w.y * uYaw.x);
       /* Signed distance to the car's PLAN OUTLINE, not to a box around
          it: the half-width is looked up along the length, so the glow
          pinches in over the bonnet and swells over the rear flares the
          way the bodywork does. */
-      float t = clamp((w.y + uHalf.y) / (2.0 * uHalf.y), 0.0, 1.0);
+      float t = clamp((wb.y + uHalf.y) / (2.0 * uHalf.y), 0.0, 1.0);
       float hx = texture2D(uPlan, vec2(t, 0.5)).r * uHalf.x;
-      vec2 dd = vec2(abs(w.x) - hx, abs(w.y) - uHalf.y);
+      vec2 dd = vec2(abs(wb.x) - hx, abs(wb.y) - uHalf.y);
       float sd = length(max(dd, 0.0)) + min(max(dd.x, dd.y), 0.0);
 
       /* Contact shadow: a soft pool, darkest under the middle and
@@ -4053,8 +4112,8 @@ const carShadowMat = new THREE.ShaderMaterial({
          is what stops the spill looking like an airbrushed gradient;
          it is cheap and it only ever varies the brightness, never the
          extent, so the shape still follows the plan exactly. */
-      float mot = 0.80 + 0.20 * sin(w.x * (5.1 / uPad))
-                             * sin(w.y * (3.7 / uPad) + 1.3);
+      float mot = 0.80 + 0.20 * sin(wb.x * (5.1 / uPad))
+                             * sin(wb.y * (3.7 / uPad) + 1.3);
       float spill = 1.0 - smoothstep(-0.06 * uPad, 0.30 * uPad, sd);
       float under = 0.34 + 0.66 * smoothstep(-0.40 * uPad, -0.02 * uPad, sd);
       float g  = spill * under * mot;
@@ -4074,31 +4133,18 @@ const carShadowMat = new THREE.ShaderMaterial({
            of the ROAD coordinate, not of distance behind the car, so a
            mark stays with the tarmac it was laid on. */
         float behind = w.y - uHalf.y;              // 0 at the tail
-        float bp = max(behind, 0.0);
         float p = behind / (4.0 * uPad) - uScroll;
-        /* Enough wander to say "laid by a moving car", not enough to
-           squiggle. A tyre tracks; it does not meander. */
-        float wob = 0.020 * sin(6.2832 * p)
-                  + 0.010 * sin(18.850 * p + 1.3)
-                  + 0.005 * sin(31.416 * p + 2.7);
-        float off = abs(w.x) / uHalf.x - (0.80 + wob);   // signed, so the
-        float dl  = abs(off);                            // grooves run true
-        /* A flat core with a short shoulder, not a bell — rubber has an
-           edge to it, and a Gaussian read as a blurred shadow.
-           The grooves are keyed to the SIGNED offset. Keying them to the
-           distance instead, which is the obvious thing to write, wraps
-           them round the wandering centreline and lays the mark out as a
-           chain of nested chevrons — tread, but stamped sideways. */
-        float core   = 1.0 - smoothstep(0.090, 0.150, dl);
-        float groove = 1.0 - 0.18 * (0.5 + 0.5 * cos(off * 63.0));
-        /* Barely patchy, and no high-frequency grain at all: at ten
-           cycles over the run it chopped each mark into a chain of
-           beads rather than reading as texture. A tyre tracks. */
-        float patchy = 0.80 + 0.20 * (0.5 + 0.5 * sin(12.566 * p + 0.7)
-                                              * sin(25.133 * p + 2.1));
-        float fade = smoothstep(-0.95 * uPad, -0.20 * uPad, behind)
-                   * (1.0 - smoothstep(0.0, 5.5 * uPad, bp));
-        sh += uSkid * core * groove * patchy * fade * 1.35;
+        float xn = w.x / uHalf.x;              // SIGNED: the four differ
+        float mk = skidMark(uTrkX.x, uTrkZ.x, xn, behind, p)
+                 + skidMark(uTrkX.y, uTrkZ.y, xn, behind, p);
+        #ifdef CAR_SKID4
+          /* Only compiled in once the car is sideways. Straight ahead the
+             front tyres roll in the rears' tracks and two more marks buy
+             nothing but fill, so the shader is built without them. */
+          mk += skidMark(uTrkX.z, uTrkZ.z, xn, behind, p)
+              + skidMark(uTrkX.w, uTrkZ.w, xn, behind, p);
+        #endif
+        sh += uSkid * min(mk, 1.25) * 1.35;    // capped where marks cross
       #endif
 
       float a = clamp(sh + gw, 0.0, 1.0);
@@ -4159,14 +4205,18 @@ const carStreakMat = new THREE.ShaderMaterial({
     uSpan:    { value: 20 },                  // metres of run, car-local
     uStart:   { value: -6 },
     uLen:     { value: 2.3 },
+    uCone:    { value: 0 },       // widens the run as the car goes sideways
   },
   vertexShader: /* glsl */`
     attribute vec4 aStk;      // phase, length scale, 0 = head 1 = tail, bold
-    uniform float uSpeed, uScrollA, uSpan, uStart, uLen;
+    uniform float uSpeed, uScrollA, uSpan, uStart, uLen, uCone;
     varying float vA;
     void main(){
       float e = fract(aStk.x + uScrollA);
       vec3 p = position;                       // x, y carry the scatter
+      /* A drifting car presents a wider face to the air and throws it
+         further out, so the run opens into a cone rather than a tube. */
+      p.x *= 1.0 + uCone * (0.25 + 1.5 * e);
       p.z = -(uStart + e * uSpan + aStk.z * uLen * aStk.y * uSpeed);
       /* compact support at both ends of the run: a streak never pops
          into or out of existence at full brightness */
@@ -4273,7 +4323,11 @@ function roadSlope(z){
 /* ── car, per frame ───────────────────────────────────────────────────
    Two matrices and six uniforms. No geometry is touched and no group is
    walked: the wheels and the headlight pods turn in the vertex stage.  */
-let carWF = 0, carWR = 0, carPop = 0;
+let carWF = 0, carWR = 0, carPop = 0, carDriftAng = 0;
+/* Full lock at the top of the slider: 50 degrees is competition-drift
+   territory — a big, obvious angle that still reads as a car holding a
+   slide rather than one that has spun and is travelling backwards. */
+const DRIFT_MAX = 0.87;
 function updateCar(T, dt){
   const c = state.car, A = state.audio;
   /* Which way the car points follows the world rather than a setting.
@@ -4301,8 +4355,12 @@ function updateCar(T, dt){
   const k = Math.min(spd / 7, 1);                 // 0 when parked
   carRoot.position.set(x, 0, z);
   carGround.position.set(x, 0.08, z);
+  /* Drift is a yaw on the BODY only. carGround keeps pointing down the
+     road, because the car is still travelling down the road — that is
+     what a drift is, and it is why the tyre marks stay straight while
+     the car sits across them. */
   const yaw = away ? Math.atan2(-slope, -1) : Math.atan2(slope, 1);
-  carRoot.rotation.set(0, yaw,
+  carRoot.rotation.set(0, yaw + carDriftAng,
     clamp(-slope * k * 0.5, -0.09, 0.09));                  // lean into the bend
   carGround.rotation.y = yaw;
 
@@ -5200,6 +5258,8 @@ function generateScene(seed, mood){
     s.car.glow = R.chance(rng, 0.5) ? R.range(rng, 0.15, 0.8) : 0;
     s.car.motion = R.chance(rng, 0.75) ? R.range(rng, 0.4, 1.2) : 0;
     s.car.skid = R.chance(rng, 0.55) ? R.range(rng, 0.3, 1.0) : 0;
+    s.car.drift = (s.road.on && s.road.curve !== 0 && R.chance(rng, 0.3))
+      ? R.range(rng, 0.35, 1.0) : 0;
     s.car.shadow = R.range(rng, 0.55, 0.85);
     // a car wants somewhere to drive to: keep the floor moving
     if (Math.abs(s.grid.speed) < 0.5) s.grid.speed = R.range(rng, 0.9, 2.0);
@@ -5614,6 +5674,49 @@ function applyCar(){
      Its two configurations put the body in different places inside the
      quad, which is exactly why the shader measures in world units.    */
   const hw = carHalfW * S, hl = carLen * 0.5 * S;
+  /* Drift. The DIRECTION comes from the road's own bend and from nothing
+     else, so a straight road has no bend for the drift to be in the
+     direction of and the car stays square — the slider is disabled in
+     the panel when that is the case rather than silently doing nothing.
+     The sign flips with travel: yawing the nose into a right-hander is
+     one way round driving away and the other coming at you.          */
+  const bend = state.road.on ? state.road.curve : 0;
+  const goingAway = state.grid.speed * 6
+                  + (state.road.on ? state.road.speed * 6 : 0) >= 0;
+  carDriftAng = bend === 0 ? 0
+    : c.drift * DRIFT_MAX * Math.sign(bend) * (goingAway ? -1 : 1);
+
+  /* Where the four contact patches actually are, in the GROUND frame —
+     the body is yawed relative to it, so the wheels are no longer two
+     mirrored pairs and each needs its own track and its own start. */
+  const m2 = CAR_MODELS[carModelId] || CAR_MODELS.lambo;
+  const cs = Math.cos(carDriftAng), sn = Math.sin(carDriftAng);
+  const tx = [], tz = [];
+  for (const [wx, wz] of (m2.axles || [[0.8,-1.3],[-0.8,-1.3],[0.8,1.2],[-0.8,1.2]])){
+    tx.push((wx * cs + wz * sn) * S / hw);       // normalised lateral
+    tz.push(-(-wx * sn + wz * cs) * S - hl);     // rearward of the tail
+  }
+  /* Straight ahead the fronts roll in the rears' tracks, so only the
+     rears are drawn and the shader is built without the other two. */
+  const four = Math.abs(carDriftAng) > 0.004;
+  const su0 = carShadowMat.uniforms;
+  su0.uTrkX.value.set(tx[2], tx[3], tx[0], tx[1]);   // rears first
+  su0.uTrkZ.value.set(tz[2], tz[3], tz[0], tz[1]);
+  if (!!carShadowMat.defines.CAR_SKID4 !== four){
+    if (four) carShadowMat.defines.CAR_SKID4 = 1;
+    else delete carShadowMat.defines.CAR_SKID4;
+    carShadowMat.needsUpdate = true;
+  }
+  su0.uYaw.value.set(cs, sn);
+  carStreakMat.uniforms.uCone.value = Math.abs(c.drift) * (bend === 0 ? 0 : 1);
+  /* Opposite lock: the fronts point where the car is GOING, which is
+     down the road, so in body coords that is minus the drift angle.
+     Clamped to a plausible steering lock — past about 20 degrees the
+     tyre swings its long axis across the arch and starts poking out
+     through the flare, which is the one thing that reads as broken
+     rather than as a car on the limit. */
+  carMat.uniforms.uSteer.value = clamp(-carDriftAng, -0.35, 0.35);
+
   /* An effect counts as live if its slider is up OR the audio can raise
      it, because the audio term is additive — deciding on the slider
      alone would compile out and hide exactly the case where someone maps
@@ -5621,7 +5724,21 @@ function applyCar(){
   const bandOn = state.audio.on && state.audio.mCarMotion.band !== 'off';
   const air  = c.motion > 0.001 || bandOn;
   const skid = c.skid > 0.001;
-  const qw = hw * 1.55, ql = hl * (skid ? 2.6 : 1.8);
+  /* Wide enough for the tracks that are actually drawn. At full lock a
+     rear corner swings out to ~1.5 half-widths, well past the 1.55 the
+     quad used to be, and the outermost mark was simply cut off at the
+     quad's edge. Measured off the tracks rather than guessed, so a car
+     with a different wheelbase gets the width it needs. Nothing else
+     moves with it: the shadow and the underglow are sized in world
+     units off the body, not in quad UVs.                             */
+  const lat = skid ? (four ? tx : [tx[2], tx[3]]).map(Math.abs) : [0];
+  /* ...and wide enough for the yawed BODY too, now that the glow turns
+     with it: at full lock the shell's corners reach far wider across the
+     road than its half-width, and the glow would have been cut off
+     square at the quad's edge. */
+  const bodyLat = Math.abs(cs) + (hl / hw) * Math.abs(sn) + 0.34;
+  const qw = hw * Math.max(1.55, Math.max(...lat) + 0.22, bodyLat);
+  const ql = hl * (skid ? 2.6 : 1.8);
   const off = skid ? -hl : 0;
   carShadow.scale.set(qw * 2, 1, ql * 2);
   carShadow.position.z = off;
@@ -5876,6 +5993,11 @@ const TIPS = {
     + 'running at the road\'s speed and gone when it stops. This is '
     + 'what makes it read as driving rather than parked. Audio can raise '
     + 'it on top of the slider, including from 0.',
+  'car.drift':'Hangs the tail out. The car keeps travelling down the road '
+    + 'while its body sits across it, the speed streaks open into a cone, and '
+    + 'all four tyres lay rubber instead of two. Which way it slides is taken '
+    + 'from the road bend, so it needs a road with some curve in it — with a '
+    + 'straight road there is no bend to drift into and this does nothing.',
   'car.skid':'Rubber laid down behind the rear tyres, wandering and patchy '
     + 'the way real marks are, and fading out behind the car. Runs at the '
     + 'road\'s speed. At 0 it is compiled out and costs nothing.',
@@ -6094,6 +6216,8 @@ const SCHEMA = [
     ['chk','Rear wing','car.wing',                  { show: CR }],
     ['rng','Lights','car.lights',0,4,0.01,          { show: CR }],
     ['rng','Underglow','car.glow',0,2,0.01,         { show: CR }],
+    ['rng','Drift','car.drift',0,1,0.01,            { show: CR,
+      dis: s => !s.road.on || s.road.curve === 0 }],
     ['rng','Speed streaks','car.motion',0,2,0.01,   { show: CR }],
     ['rng','Tyre marks','car.skid',0,1.5,0.01,      { show: CR }],
     ['rng','Ground shadow','car.shadow',0,1,0.01,   { show: CR }],

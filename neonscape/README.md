@@ -45,13 +45,20 @@ headlights raised. Wheels, speed streaks and tyre marks all run at the road's
 speed, so a stopped road parks it.
 
 Solid bodywork, a glowing wireframe or both at once, with body and accent
-colours, lane, distance, size, lights, underglow, speed streaks, tyre marks and
-the rear wing. The underglow is strip lighting: it spills onto the road along
-the body's own outline rather than pooling in a circle, and it lights the
-ground only. The speed streaks come off the car itself and stream past it; the
-tyre marks are rubber laid down behind the rear wheels, wandering and patchy
-and fading out with distance. Between them they are what makes it read as
-driving rather than parked. Switched off the car costs nothing at all —
+colours, lane, distance, size, lights, underglow, speed streaks, tyre marks,
+drift and the rear wing. The underglow is strip lighting: it spills onto the
+road along the body's own outline rather than pooling in a circle, and it
+lights the ground only. The speed streaks come off the car itself and stream
+past it; the tyre marks are rubber laid down behind the wheels, wandering and
+patchy and fading out with distance. Between them they are what makes it read
+as driving rather than parked.
+
+**Drift** hangs the tail out. The car keeps travelling down the road while its
+body sits across it, the speed streaks open into a cone, and all four tyres lay
+rubber instead of two. Which way it slides is taken from the road's bend rather
+than being a setting of its own, so it needs a road with some curve in it — on
+a straight road the control is disabled, because there is no bend to drift
+into. Switched off the car costs nothing at all —
 no geometry is built until the first time it is turned on, and turning it off
 returns the scene to exactly the draw calls it had without it. The tyre marks
 are the same: at 0 they are compiled out of the shader.
