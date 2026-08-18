@@ -3181,7 +3181,7 @@ const M2W = 2.1;
 /* per-vertex material ids */
 const CAR_BODY = 0, CAR_GLASS = 1, CAR_TYRE = 2, CAR_RIM = 3,
       CAR_TAIL = 4, CAR_HEAD = 5, CAR_TRIM = 6, CAR_EXH = 7,
-      CAR_AMBER = 8, CAR_PLATE = 9;
+      CAR_AMBER = 8, CAR_PLATE = 9, CAR_FASCIA = 10;
 /* aRot.w — which uniform angle a vertex turns with */
 const SPIN_NONE = 0, SPIN_WF = 1, SPIN_WR = 2, SPIN_POP = 3;
 const NO_SPIN = [0, 0, 0, SPIN_NONE];
@@ -3369,7 +3369,9 @@ const COUNTACH_ST = [
   [ 1.86, 0.115,0.820,0.285, 0.880, 0.470, 0.868, 0.740, 0.520, 0.516], // 16 nose shoulder
   [ 2.04, 0.100,0.800,0.245, 0.860, 0.380, 0.840, 0.632, 0.430, 0.428], // 17 nose face
 ];
-/** one station → 10 ring points, counter-clockwise in xy.
+/** one station → 10 ring points, counter-clockwise in xy. Shared by
+    every lofted model; the roles below are explained through the
+    Countach's table but the vocabulary is the same for all of them.
     The flank carries TWO widths — wLo at the arch lip and wHi at the
     shoulder — and the sign of the difference between them is what stops
     the car being a box. Over the REAR wheels wHi > wLo, which is those
@@ -3394,7 +3396,7 @@ const COUNTACH_ST = [
     of the engine deck, and that hump-valley-hump edge is why the rear
     panel cannot be one rectangle. Along the bonnet it is nearly nothing
     — under 20 mm — because a Countach's bonnet is a FLAT plane.        */
-function countachRing(st){
+function carRing(st){
   const [z, yb, ws, ysl, wLo, yf, wHi, wt, yt, ytc] = st;
   const half = [[0, yb], [ws, yb + 0.02], [wLo, ysl], [wHi, yf], [wt, yt]];
   const out = half.map(([x, y]) => [x, y, z]);
@@ -3417,9 +3419,11 @@ function countachSkin(i, k){
   if (i === 9) return (k >= 3 && k <= 6) ? CAR_GLASS : CAR_BODY;    // windscreen
   return CAR_BODY;
 }
-/** one wheel and its mirror: tyre, sidewall, five-slot Bravo alloy */
-function countachWheels(B, cx, cz, r, hw, rim, spin){
-  const SEG = 15;                       // 15 → exactly 5 dark slots
+/** One wheel and its mirror: tyre, sidewall, slotted alloy. Shared by
+    every model — seg and slotEvery pick the alloy pattern: 15/3 is the
+    Countach's five-slot Bravo, finer pitches read as finned discs. */
+function carWheels(B, cx, cz, r, hw, rim, spin, seg = 15, slotEvery = 3){
+  const SEG = seg;
   /* aRot.z is the pop-ups' swing angle and unused by a wheel, so the
      wheel's centreline lives there — the steer needs a pivot and there
      is no spare attribute. Stored unsigned: polyM hands the mirrored
@@ -3438,9 +3442,9 @@ function countachWheels(B, cx, cz, r, hw, rim, spin){
     // outer sidewall, down to the alloy
     B.polyM([at(x1, k, r), at(x1, k, rim), at(x1, k1, rim), at(x1, k1, r)],
             CAR_TYRE, rot);
-    // alloy face — every third wedge is a slot
+    // alloy face — every slotEvery-th wedge is a slot
     B.polyM([[x1, r, cz], at(x1, k1, rim), at(x1, k, rim)],
-            k % 3 === 0 ? CAR_TRIM : CAR_RIM, rot);
+            k % slotEvery === 0 ? CAR_TRIM : CAR_RIM, rot);
     // inner face (only ever seen through the arch)
     B.polyM([[x0, r, cz], at(x0, k, r), at(x0, k1, r)], CAR_TYRE, rot);
   }
@@ -3450,7 +3454,7 @@ function buildCountach(){
   const B = carBuilder();
 
   /* ── shell ── */
-  const rings = COUNTACH_ST.map(countachRing);
+  const rings = COUNTACH_ST.map(carRing);
   const n = rings[0].length;
   for (let i = 0; i < rings.length - 1; i++){
     const a = rings[i], b = rings[i + 1];
@@ -3478,8 +3482,8 @@ function buildCountach(){
      622 mm. Track 1535 front / 1605 rear puts the centreplanes at
      0.77 and 0.80, and the flares clear the outer sidewalls by the
      ~30 mm that makes them look shrink-wrapped onto the tyres.      */
-  countachWheels(B,  0.77,  1.15, 0.303, 0.1125, 0.200, SPIN_WF);
-  countachWheels(B,  0.80, -1.30, 0.311, 0.1725, 0.205, SPIN_WR);
+  carWheels(B,  0.77,  1.15, 0.303, 0.1125, 0.200, SPIN_WF);
+  carWheels(B,  0.80, -1.30, 0.311, 0.1725, 0.205, SPIN_WR);
 
   /* ── front ──
      A Countach's face is three stacked bands, each stepping forward as
@@ -3659,19 +3663,333 @@ function buildCountach(){
   return { ...B.finish(wingAt), split };
 }
 
-/* Model registry — the extension point for the cars that follow. `size`
-   is the built model's own bounding box in metres (length, half-width,
-   height); the placement and shadow code reads it rather than assuming
-   any one car's proportions.                                          */
+/* ── DMC DeLorean (DMC-12) ────────────────────────────────────────────
+   Every number below was read off an orthographic four-view and a
+   dead-on photograph rather than guessed: 4216 mm over the bumpers,
+   1857 over the body — the 1988 the encyclopedias quote includes the
+   door mirrors — 1140 tall, 2413 wheelbase, 864 / 939 overhangs, 1590
+   track at both ends, and the factory-staggered wheels: 195/60R14
+   front (590 dia), 235/60R15 rear (663), a 12% difference that is most
+   of the car's stance.
+
+   The Countach is a wedge; this emphatically is not, and every attempt
+   to draw it as one comes out looking like a generic eighties sports
+   car. What actually makes it a DeLorean, measured:
+
+   · The bonnet is nearly LEVEL. 673 mm at its leading edge, 804 at the
+     cowl — 131 mm over 1391, five and a half degrees. Draw it at the
+     nine a wedge wants and the nose drops 60 mm too far and the whole
+     car turns into a doorstop.
+   · In plan it is almost a constant-width slab: 816 mm half-width at
+     the nose, 927 at the widest, 836 at the tail. A 13% total taper.
+   · The roof is LONG and flat — 47% to 70% of the length — and the
+     tail panel is TALL, its top edge still at 855 mm, three quarters
+     of the car's height. The deck falls only 11° across the louvres.
+   · One flank groove at 585 mm and one beltline at 780 split the side
+     into three near-vertical bands. The arch crowns (661 front, 741
+     rear — each clearing its own tyre by 75) cut THROUGH the groove.
+   · A slatted grille sits between the lamp pairs, and the bonnet's
+     leading edge stands over the whole fascia as one hard transverse
+     line. Both are the front's signature; without them the face is
+     just four rectangles on a blank.
+
+   Which is why this one is lofted on a 14-point ring rather than the
+   Countach's 10: the two extra creases per side are the flank groove
+   and the bonnet/roof shoulder, and they are the folds the car is
+   made of. The extra 340 triangles are two thousandths of a frame.
+
+        z,     yb,     ws,    wLo,    ysl,    wGr,    ygr,    wHi,     yf,     wt,     yt,    wIn,    yIn,    ytc    */
+const DELOREAN_ST = [
+  [-2.050, 0.300, 0.560, 0.780, 0.380, 0.836, 0.545, 0.832, 0.700, 0.790, 0.845, 0.600, 0.822, 0.815], //  0 tail face
+  [-1.985, 0.200, 0.650, 0.820, 0.375, 0.844, 0.560, 0.840, 0.720, 0.802, 0.872, 0.610, 0.836, 0.828], //  1 deck trailing edge
+  [-1.610, 0.160, 0.800, 0.878, 0.290, 0.889, 0.578, 0.882, 0.762, 0.762, 0.978, 0.585, 0.932, 0.924], //  2 arch back / quarter glass rear
+  [-1.380, 0.160, 0.560, 0.904, 0.735, 0.904, 0.755, 0.892, 0.775, 0.722, 1.020, 0.570, 0.972, 0.964], //  3
+  [-1.169, 0.155, 0.530, 0.915, 0.741, 0.915, 0.760, 0.898, 0.780, 0.682, 1.055, 0.560, 1.006, 0.998], //  4 rear axle
+  [-0.960, 0.155, 0.560, 0.922, 0.735, 0.922, 0.755, 0.902, 0.782, 0.632, 1.088, 0.552, 1.040, 1.032], //  5
+  [-0.843, 0.155, 0.720, 0.912, 0.470, 0.924, 0.596, 0.902, 0.782, 0.570, 1.100, 0.330, 1.100, 1.100], //  6 roof rear
+  [-0.780, 0.155, 0.800, 0.911, 0.290, 0.923, 0.594, 0.900, 0.782, 0.575, 1.118, 0.325, 1.118, 1.118], //  7 arch front / quarter-vent
+  [-0.585, 0.155, 0.792, 0.914, 0.366, 0.925, 0.592, 0.897, 0.781, 0.578, 1.132, 0.320, 1.132, 1.132], //  8 door glass, rear edge
+  [ 0.084, 0.155, 0.770, 0.910, 0.370, 0.922, 0.588, 0.888, 0.780, 0.560, 1.108, 0.320, 1.108, 1.108], //  9 screen head
+  [ 0.675, 0.155, 0.780, 0.905, 0.370, 0.917, 0.585, 0.880, 0.775, 0.830, 0.804, 0.505, 0.808, 0.808], // 10 cowl
+  [ 0.790, 0.155, 0.790, 0.906, 0.370, 0.918, 0.583, 0.878, 0.773, 0.828, 0.798, 0.505, 0.802, 0.802], // 11 cowl vent, front edge
+  [ 0.900, 0.155, 0.800, 0.899, 0.290, 0.911, 0.580, 0.874, 0.770, 0.822, 0.792, 0.502, 0.796, 0.796], // 12 arch back
+  [ 1.100, 0.155, 0.560, 0.905, 0.655, 0.905, 0.672, 0.868, 0.762, 0.815, 0.778, 0.500, 0.782, 0.782], // 13
+  [ 1.244, 0.155, 0.530, 0.899, 0.661, 0.899, 0.678, 0.862, 0.756, 0.808, 0.766, 0.498, 0.770, 0.770], // 14 front axle
+  [ 1.400, 0.155, 0.560, 0.892, 0.655, 0.892, 0.672, 0.856, 0.748, 0.800, 0.752, 0.495, 0.756, 0.756], // 15
+  [ 1.560, 0.160, 0.800, 0.860, 0.290, 0.872, 0.566, 0.848, 0.732, 0.792, 0.740, 0.490, 0.744, 0.744], // 16 arch front
+  [ 1.900, 0.180, 0.745, 0.828, 0.340, 0.840, 0.530, 0.830, 0.682, 0.776, 0.700, 0.480, 0.703, 0.703], // 17
+  [ 2.000, 0.215, 0.655, 0.792, 0.330, 0.822, 0.478, 0.818, 0.598, 0.760, 0.676, 0.474, 0.678, 0.678], // 18 bonnet leading edge
+  [ 2.030, 0.240, 0.585, 0.748, 0.320, 0.802, 0.448, 0.800, 0.552, 0.742, 0.642, 0.464, 0.644, 0.644], // 19 fascia face
+];
+/** One DeLorean station → 14 ring points, counter-clockwise in xy. The
+    Countach's five half-points plus one: (wIn, yIn) sits between the
+    top edge and the centreline, and it is doing two jobs. Along the
+    bonnet it is the shoulder crease at ±500 mm that separates the flat
+    centre panel from the wing tops — the fold that makes the nose read
+    as folded paper instead of a blister. Over the engine it is the lip
+    of the louvre bay, so the sail panels can stand proud of a FLAT bay
+    floor; run the deck straight from the sail edge to the centreline,
+    as a 10-point ring must, and the recess the louvres sit in does not
+    exist at all.                                                      */
+function dmcRing(st){
+  const [z, yb, ws, wLo, ysl, wGr, ygr, wHi, yf, wt, yt, wIn, yIn, ytc] = st;
+  const half = [[ws, yb + 0.02], [wLo, ysl], [wGr, ygr],
+                [wHi, yf], [wt, yt], [wIn, yIn]];
+  const out = [[0, yb, z], ...half.map(([x, y]) => [x, y, z]), [0, ytc, z]];
+  for (let i = half.length - 1; i >= 0; i--)
+    out.push([-half[i][0], half[i][1], z]);
+  return out;
+}
+/* Skin material for span i (station i → i+1), ring edge k.
+   k: 0 underbody R · 1 rocker + wheel well R · 2 lower flank R
+      3 upper flank R · 4 glasshouse / sail flank R · 5 shoulder R
+      6 centre panel R · 7 centre panel L · 8 shoulder L · 9 glasshouse L
+      10 upper flank L · 11 lower flank L · 12 rocker L · 13 underbody L
+
+   k1/k12 dark on EVERY span is the single highest-value line in this
+   function: one band paints the black rocker stripe that runs the
+   whole car, the wheel-well faces, and the undercut below the sills,
+   and it comes free out of geometry the arch trick already needs.
+   k4/k9 is the other one, and it is where the "cabin beams" live. Read
+   along the flank it alternates: black A-pillar (the post itself is
+   stainless, but the door seal bonded over it reads black), long door
+   glass, then 260 mm of BRIGHT stainless B-pillar — that one is worth
+   getting right, since the instinct is to paint it black and the real
+   car's is body-coloured with one black louvre insert plugged into it —
+   then the long quarter window in the sail. Bright/dark/bright/dark in
+   that order is most of what stops the glasshouse reading as one smooth
+   dark blob.                                                          */
+function deloreanSkin(i, k){
+  if (k === 0 || k === 13 || k === 1 || k === 12) return CAR_TRIM;
+  const beam = k === 4 || k === 9;         // glasshouse band / sail flank
+  const top  = k >= 5 && k <= 8;           // shoulder + centre panels
+  const mid  = k === 6 || k === 7;         // centre panel only
+  if (i === 18) return CAR_FASCIA;         // the whole nose below the shutline
+  if (i >= 1 && i <= 5){                   // engine deck
+    if (top) return CAR_TRIM;              //   louvre bay, sunk between the sails
+    if (beam && i >= 2) return CAR_GLASS;  //   rear quarter windows
+    return CAR_BODY;                       //   sail flank behind them
+  }
+  if (i === 8 && beam) return CAR_GLASS;   // door glass
+  if (i === 9) return beam ? CAR_TRIM      // A-pillar
+                           : top ? CAR_GLASS : CAR_BODY;   // windscreen
+  if (i === 10 && mid) return CAR_TRIM;    // cowl vent at the screen base
+  return CAR_BODY;
+}
+/** build the DeLorean; returns { solid, wire, split, wireSplit } */
+function buildDeLorean(){
+  const B = carBuilder();
+
+  /* ── shell ── */
+  const rings = DELOREAN_ST.map(dmcRing);
+  const n = rings[0].length;
+  for (let i = 0; i < rings.length - 1; i++){
+    const a = rings[i], b = rings[i + 1];
+    for (let k = 0; k < n; k++){
+      const k1 = (k + 1) % n;
+      B.poly([a[k], a[k1], b[k1], b[k]], deloreanSkin(i, k));
+    }
+  }
+  /* The nose cap is FASCIA and the tail cap is not. That asymmetry is
+     the car: the entire front below the bonnet shutline is one dark
+     grey moulding, while at the back the panel the lamps and plate sit
+     in is body-coloured and only the bumper below it is dark.        */
+  const capC = st => [0, (st[1] + st[13]) * 0.5, st[0]];
+  const first = rings[0], last = rings[rings.length - 1];
+  const c0 = capC(DELOREAN_ST[0]), c1 = capC(DELOREAN_ST[DELOREAN_ST.length - 1]);
+  for (let k = 0; k < n; k++){
+    const k1 = (k + 1) % n;
+    B.poly([c0, first[k1], first[k]], CAR_BODY);
+    B.poly([c1, last[k], last[k1]], CAR_FASCIA);
+  }
+
+  /* ── wheels — the stagger is the stance. Both tyres come within a
+        few millimetres of the flank above them, so each fills its arch
+        instead of sitting in a hole; 16 segments with every second
+        wedge dark is as much of the turbine alloys as any wallpaper
+        pixel budget will resolve.                                   */
+  carWheels(B, 0.795,  1.244, 0.295,  0.0975, 0.183, SPIN_WF, 16, 2);
+  carWheels(B, 0.795, -1.169, 0.3315, 0.1175, 0.196, SPIN_WR, 16, 2);
+
+  /* ── front ──
+     ONE continuous lit slot, 1430 mm wide, is the whole face: four
+     165 x 100 sealed beams in two pairs at ±366–531 and ±549–714, and
+     between them a slatted grille filling the gap at ±360. Top and
+     bottom edges shared by all three. Splitting the lamps and the
+     grille into separate features at different heights — or leaving the
+     grille out, as the last pass did — is the single biggest reason a
+     DeLorean model comes out looking like a generic wedge.
+
+     The vertical stack is tight, and that tightness is the point: the
+     bonnet's leading edge oversails the whole slot only 30 mm above it,
+     then the grey bumper band with the ambers at ±440–565 tucked under
+     the INBOARD lamp of each pair — NOT out at the corners — the plate
+     between them, and the lower mesh intake, which is where all the
+     radiator air actually goes. The DMC grille is decorative.        */
+  {
+    const GY0 = 0.527, GY1 = 0.653;                       // grille band
+    const LY0 = 0.540, LY1 = 0.640;                       // sealed-beam band
+    B.box(-0.360, 0.360, GY0, GY1, 2.018, 2.038, CAR_TRIM, NO_SPIN);
+    for (let j = 0; j < 8; j++){          // ten fins on the car; eight is
+      const y = GY0 + 0.006 + j * 0.0148; //   all a wallpaper can resolve
+      B.box(-0.356, 0.356, y, y + 0.0072, 2.034, 2.050, CAR_FASCIA, NO_SPIN);
+    }
+    B.boxM(0.351, 0.546, LY0 - 0.008, LY1 + 0.008, 2.018, 2.040,
+           CAR_TRIM, NO_SPIN);                            // black lamp pocket
+    B.boxM(0.534, 0.729, LY0 - 0.008, LY1 + 0.008, 2.018, 2.040,
+           CAR_TRIM, NO_SPIN);
+    B.boxM(0.366, 0.531, LY0, LY1, 2.026, 2.052,
+           CAR_TRIM, NO_SPIN, { pz: CAR_HEAD });          // inner beam
+    B.boxM(0.549, 0.714, LY0, LY1, 2.026, 2.052,
+           CAR_TRIM, NO_SPIN, { pz: CAR_HEAD });          // outer beam
+  }
+  /* The bonnet's leading edge, as a lip standing over the fascia rather
+     than a crease drawn on it. It is the hardest line on the front of
+     the real car — the stainless ends, oversails the dark moulding, and
+     puts a shadow straight across the top of the lamps. Modelled flush
+     it disappears; this way it survives at eighty pixels wide.        */
+  B.hex([[-0.765,0.662,1.940], [0.765,0.662,1.940], [0.765,0.700,1.940], [-0.765,0.700,1.940],
+         [-0.735,0.658,2.074], [0.735,0.658,2.074], [0.735,0.682,2.074], [-0.735,0.682,2.074]],
+        CAR_BODY, NO_SPIN);
+  /* Bumper band. Not a bar — a moulded band in the same grey fascia,
+     standing ~25 mm proud and wrapping unbroken to the arches. Only the
+     grille, the lamp pockets and the bottom lip are black on this car;
+     painting the whole nose black loses the grey/stainless two-tone. */
+  B.hex([[-0.862,0.395,1.990], [0.862,0.395,1.990], [0.862,0.515,1.990], [-0.862,0.515,1.990],
+         [-0.790,0.395,2.108], [0.790,0.395,2.108], [0.790,0.515,2.108], [-0.790,0.515,2.108]],
+        CAR_FASCIA, NO_SPIN);
+  B.boxM(0.440, 0.565, 0.430, 0.487, 2.096, 2.116, CAR_TRIM, NO_SPIN, { pz: CAR_AMBER });
+  /* the plate fills the band's full height between the ambers. A pale
+     rectangle low in a dark mass is one of the strongest "that shape is
+     a car" cues there is, and it is the only light thing down here. */
+  B.box(-0.152, 0.152, 0.408, 0.505, 2.104, 2.118, CAR_TRIM, NO_SPIN,
+        { pz: CAR_PLATE });
+  // the real radiator opening, a fine mesh slot under the bumper
+  B.box(-0.475, 0.475, 0.332, 0.394, 2.020, 2.062, CAR_TRIM, NO_SPIN);
+  // air dam, splayed down and forward, bare black urethane
+  B.hex([[-0.742,0.150,1.960], [0.742,0.150,1.960], [0.742,0.300,1.960], [-0.742,0.300,1.960],
+         [-0.712,0.150,2.074], [0.712,0.150,2.074], [0.712,0.290,2.074], [-0.712,0.290,2.074]],
+        CAR_TRIM, NO_SPIN);
+
+  /* ── flanks ── */
+  // black door mirrors, on the beltline just aft of the A-pillar
+  B.hexM([[0.890,0.795,0.100], [0.996,0.795,0.100], [0.996,0.875,0.100], [0.890,0.875,0.100],
+          [0.890,0.805,0.230], [0.996,0.805,0.230], [0.996,0.875,0.230], [0.890,0.875,0.230]],
+         CAR_TRIM, NO_SPIN);
+  /* The quarter louvre vent — the engine's side intake — set into the
+     B-pillar. It is the ONLY black thing on that pillar, and it has to
+     lie along the flank's tumblehome rather than stand upright, or it
+     floats off the side of the car. */
+  B.hexM([[0.884,0.790,-0.792], [0.902,0.793,-0.792], [0.633,1.060,-0.792], [0.615,1.057,-0.792],
+          [0.884,0.790,-0.702], [0.902,0.793,-0.702], [0.633,1.060,-0.702], [0.615,1.057,-0.702]],
+         CAR_TRIM, NO_SPIN);
+  /* The gullwing shutlines. Each door takes a slice of the roof with
+     it, leaving a fixed 330 mm T-panel spine down the middle whose two
+     edges run the length of the cabin — the one line on this car that
+     says the doors go UP. Sunk into the roof rather than floated over
+     it: a face a fraction above another z-fights into stripes at
+     distance.                                                        */
+  {
+    const roofY = z => 1.130 - (z + 0.700) * 0.028;
+    const z0 = 0.060, z1 = -0.620, y0 = roofY(z0), y1 = roofY(z1);
+    B.hexM([[0.152,y1-0.014,z1], [0.180,y1-0.014,z1], [0.180,y1+0.004,z1], [0.152,y1+0.004,z1],
+            [0.152,y0-0.014,z0], [0.180,y0-0.014,z0], [0.180,y0+0.004,z0], [0.152,y0+0.004,z0]],
+           CAR_BODY, NO_SPIN);
+  }
+
+  /* ── engine deck ──
+     SIX blades, and they cover the WHOLE bay — from the roof's trailing
+     edge back to the cover's lip, 1.04 m of the 1.15 m deck. That is the
+     thing to get right about this car's back: the louvre panel is not a
+     patch somewhere on the deck, it IS the deck. Scanning brightness
+     straight down a rear-three-quarter photograph gives blade/slot/blade
+     all the way from the roof to the tail edge with no plain stretch
+     anywhere, at a pitch of 173 mm with the blade taking two thirds of
+     it — and the fine engine grille people notice back there is seen
+     THROUGH the slots, not sitting behind them, so it needs no geometry
+     of its own.
+
+     Each blade follows the bay floor (ytc) rather than the sail edge:
+     the tops must stay BELOW the yt line either side, or the cover
+     reads as a comb riding on the deck instead of louvres sunk into it.
+     They widen with the bay as it opens toward the tail.             */
+  const deckY = z => 1.038 + (z + 0.960) * 0.196;
+  {
+    const bayW = z => 0.552 + (-0.960 - z) / 1.025 * 0.058;
+    const PITCH = 0.1733, DEEP = 0.116;
+    for (let j = 0; j < 6; j++){
+      const z0 = -0.914 - j * PITCH, z1 = z0 - DEEP;   // z1 is nearer the tail
+      const y0 = deckY(z0), y1 = deckY(z1);
+      const x = bayW((z0 + z1) * 0.5) - 0.022;
+      B.hex([[-x,y1+0.006,z1], [x,y1+0.006,z1], [x,y1+0.036,z1], [-x,y1+0.036,z1],
+             [-x,y0+0.006,z0], [x,y0+0.006,z0], [x,y0+0.036,z0], [-x,y0+0.036,z0]],
+            CAR_BODY, NO_SPIN);
+    }
+    // the cover's own trailing lip, closing the bay against the tail
+    const zF = -1.900, zR = -1.988, yF = deckY(zF), yR = deckY(zR), x = 0.585;
+    B.hex([[-x,yR+0.002,zR], [x,yR+0.002,zR], [x,yR+0.030,zR], [-x,yR+0.030,zR],
+           [-x,yF+0.002,zF], [x,yF+0.002,zF], [x,yF+0.030,zF], [-x,yF+0.030,zF]],
+          CAR_BODY, NO_SPIN);
+  }
+
+  /* ── rear ──
+     The clusters ARE the tail: each a 490 x 190 unit hung straight off
+     the beltline crease, running from ±287 nearly out to the corner at
+     ±775, so the two of them plus the plate bezel between them fill the
+     entire panel edge to edge. There is no painted gap above them — the
+     top edge IS the deck's trailing edge — and a model that shrinks
+     them and floats them mid-panel throws away the strongest graphic on
+     the car.
+
+     Segments inboard to outboard: the clear reverse lamp (narrowest, an
+     eighth of the lens), then the red grid, then amber — the same on US
+     and European cars; there was never a red-indicator version. The
+     grey bumper band sits well below, with the pipes hanging BELOW its
+     bottom edge where they break the silhouette.                     */
+  {
+    const LY0 = 0.648, LY1 = 0.838, LZ0 = -2.092, LZ1 = -2.048;
+    B.boxM(0.287, 0.343, LY0, LY1, LZ0, LZ1, CAR_TRIM, NO_SPIN, { nz: CAR_PLATE });
+    B.boxM(0.343, 0.648, LY0, LY1, LZ0, LZ1, CAR_TRIM, NO_SPIN, { nz: CAR_TAIL });
+    B.boxM(0.648, 0.775, LY0, LY1, LZ0, LZ1, CAR_TRIM, NO_SPIN, { nz: CAR_AMBER });
+    B.box(-0.283, 0.283, LY0, LY1, -2.076, LZ1, CAR_TRIM, NO_SPIN);
+    B.box(-0.152, 0.152, 0.657, 0.811, -2.086, -2.076, CAR_TRIM, NO_SPIN,
+          { nz: CAR_PLATE });
+  }
+  B.hex([[-0.772,0.370,-2.112], [0.772,0.370,-2.112], [0.772,0.545,-2.112], [-0.772,0.545,-2.112],
+         [-0.848,0.370,-2.030], [0.848,0.370,-2.030], [0.848,0.545,-2.030], [-0.848,0.545,-2.030]],
+        CAR_FASCIA, NO_SPIN);
+  B.boxM(0.500, 0.580, 0.248, 0.312, -2.100, -2.010, CAR_TRIM, NO_SPIN, { nz: CAR_EXH });
+
+  /* no wing and nothing after it: split at the very end keeps the wing
+     draw-range plumbing inert for this car whatever the checkbox says */
+  return { ...B.finish(B.wireCount()), split: B.count() };
+}
+
+/* Model registry — the extension point for the cars that follow. len /
+   halfW / height are the built model's own bounding box in metres; the
+   placement, shadow and streak code reads them rather than assuming any
+   one car's proportions. wheelR is the two rolling radii the odometry
+   divides by. Capability flags default to true and are only written
+   where a car LACKS something (`wing: false`, `pops: false`) — the
+   panel hides the control and the lamp logic pins uHeadOn instead of
+   tying it to a pop angle the model does not have.                    */
 const CAR_MODELS = {
   lambo: { name: 'Lamborghini', build: buildCountach,
            len: 4.17, halfW: 1.02, height: 1.17,
+           wheelR: [0.303, 0.311],
            /* contact patches, car-local metres: [x, z] per corner. The
               ground pass lays a tyre mark under each of them, and once
               the car is drifting they stop being two mirrored pairs, so
               it needs the real four rather than one track figure. */
            axles: [[0.77, 1.15], [-0.77, 1.15],      // front
                    [0.80, -1.30], [-0.80, -1.30]] }, // rear
+  delorean: { name: 'DeLorean', build: buildDeLorean,
+              len: 4.23, halfW: 1.00, height: 1.14,
+              wheelR: [0.295, 0.3315],
+              wing: false,     // never wore one — the checkbox hides
+              pops: false,     // fixed quad lamps, uHeadOn pinned at 1
+              axles: [[0.795, 1.244], [-0.795, 1.244],
+                      [0.795, -1.169], [-0.795, -1.169]] },
 };
 
 /* ── car materials ────────────────────────────────────────────────────
@@ -3806,11 +4124,18 @@ const carFrag = /* glsl */`
       // flashing is a dull orange, and two bright red bars either side
       // of the plate is what actually reads as this car from behind
       c = vec3(1.0, 0.42, 0.05) * (0.20 + 0.45 * uLights) * (0.4 + 0.6 * nv);
-    } else {                                          // number plate
+    } else if (vM < 9.5){                             // number plate
       /* flat and pale, not lit: at any real distance the plate is a light
          rectangle in the middle of a dark tail, and that patch is one of
          the strongest cues that the shape ahead is a car at all */
       c = vec3(0.66, 0.66, 0.61) * (0.42 + 0.34 * nl) + env * 0.10;
+    } else {                                          // fascia
+      /* satin dark-grey plastic, a definite step lighter than the black
+         trim: the DeLorean's nose and tail are one-piece mouldings in
+         this grey, and against it the truly black bits — lamp bezels,
+         sill band, spoiler — still read as black */
+      c = vec3(0.115, 0.115, 0.125) * (0.30 + 0.45 * nl)
+        + env * (0.10 + 0.18 * fr2) + rim * 0.6;
     }
     c = mix(c, uFogColor, smoothstep(uFogNear, uFogFar, vD));
     #ifdef CAR_REFL
@@ -3916,7 +4241,7 @@ const carWireFrag = /* glsl */`
       // line rather than a lamp — same crossfade the solid pass uses
       c = mix(uNeon * 1.35,
               vec3(1.0, 0.96, 0.86) * (0.18 + 1.7 * uLights), uHeadOn);
-    else if (vM > 8.5) c = vec3(0.92, 0.92, 0.86);
+    else if (vM > 8.5 && vM < 9.5) c = vec3(0.92, 0.92, 0.86);
     else if (vM > 7.5) c = vec3(1.0, 0.46, 0.06) * (0.5 + 1.1 * uLights);
     else if (vM > 2.5 && vM < 3.5) c = vec3(0.88, 0.90, 1.0) * 1.15;
     else if (vM > 0.5 && vM < 1.5) c = mix(uNeon, vec3(1.0), 0.45) * 1.1;
@@ -4256,6 +4581,7 @@ let carGeo = null, carModelId = '', carSolid = null, carWire = null,
     carSolidRefl = null, carWireRefl = null, carShadow = null,
     carStreaks = null, carPlanTex = null;
 let carLen = 4.16, carHalfW = 1.06, carHeight = 1.26;   // metres, per model
+let carRadF = 0.303, carRadR = 0.311, carHasPops = true;
 
 /** Build (once) the geometry for the selected model. */
 function buildCar(){
@@ -4273,6 +4599,8 @@ function buildCar(){
   carModelId = id;
   carGeo = m.build();
   carLen = m.len; carHalfW = m.halfW; carHeight = m.height;
+  [carRadF, carRadR] = m.wheelR;
+  carHasPops = m.pops !== false;
   carPlanTex = carPlanTexture(carGeo.solid, carHalfW);
   carShadowMat.uniforms.uPlan.value = carPlanTex;
   const mk = (Cls, geo, mat, refl) => {
@@ -4394,15 +4722,18 @@ function updateCar(T, dt){
      could not, because the two radii are not commensurate.            */
   if (spd > 1e-4 && dt > 0){
     const d = spd * dt / S;                       // metres of tarmac
-    carWF = (carWF + d / 0.303) % (Math.PI * 2);
-    carWR = (carWR + d / 0.311) % (Math.PI * 2);
+    carWF = (carWF + d / carRadF) % (Math.PI * 2);
+    carWR = (carWR + d / carRadR) % (Math.PI * 2);
     carMat.uniforms.uWheelF.value = carWF;
     carMat.uniforms.uWheelR.value = carWR;
   }
   /* pop-ups rise only for oncoming traffic — the one time a lit lens
      points anywhere near the camera. Driving away, the flush wedge is
-     the better silhouette anyway.                                     */
-  const popT = (!away && c.lights > 0.01) ? 1 : 0;
+     the better silhouette anyway. A car with FIXED lamps pins the target
+     at 1 instead: its lenses are always glass, never bodywork, and the
+     pop angle it also drives is inert because no vertex carries
+     SPIN_POP.                                                         */
+  const popT = !carHasPops ? 1 : (!away && c.lights > 0.01) ? 1 : 0;
   if (Math.abs(carPop - popT) > 0.0005){
     carPop += (popT - carPop) * Math.min(dt * 3.5, 1);
     carMat.uniforms.uPopAng.value = carPop;
@@ -5245,6 +5576,7 @@ function generateScene(seed, mood){
     s.fx.palmHalo = R.chance(rng, 0.3) ? R.range(rng, 0.1, 0.45) : 0; }
   else if (focus === 'car'){
     s.car.on = true;
+    s.car.model = R.pick(rng, Object.keys(CAR_MODELS));
     s.car.neon = pal.accent;
     // usually a lane over, occasionally straddling the middle of the shot
     s.car.lane = R.chance(rng, 0.8)
@@ -6213,7 +6545,6 @@ const SCHEMA = [
     ['rng','Distance','car.z',-220,6,1,             { show: CR }],
     ['rng','Lane position','car.lane',-1,1,0.01,    { show: CR }],
     ['rng','Size','car.size',0.5,2,0.01,            { show: CR }],
-    ['chk','Rear wing','car.wing',                  { show: CR }],
     ['rng','Lights','car.lights',0,4,0.01,          { show: CR }],
     ['rng','Underglow','car.glow',0,2,0.01,         { show: CR }],
     ['rng','Drift','car.drift',0,1,0.01,            { show: CR,
@@ -6221,6 +6552,14 @@ const SCHEMA = [
     ['rng','Speed streaks','car.motion',0,2,0.01,   { show: CR }],
     ['rng','Tyre marks','car.skid',0,1.5,0.01,      { show: CR }],
     ['rng','Ground shadow','car.shadow',0,1,0.01,   { show: CR }],
+    /* LAST in the section, and hidden rather than disabled, when the
+       model has no wing to switch. Hidden because a greyed "Rear wing"
+       on a DeLorean would read as a missing feature rather than a fact
+       about the car; last because a row that appears and disappears
+       partway up a list shunts everything below it every time the model
+       changes, and the eye loses its place. */
+    ['chk','Rear wing','car.wing',                  { show: s => s.car.on
+      && (CAR_MODELS[s.car.model] || CAR_MODELS.lambo).wing !== false }],
   ]},
   { id:'mtn', title:'Horizon', apply:'mtn', rows:[
     ['sel','Type','mtn.mode',[['off','Off'],['mountains','Mountains'],

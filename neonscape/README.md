@@ -32,26 +32,33 @@ type a seed and regenerate.
 
 ## The car
 
-**Car** puts a Lamborghini Countach on the tarmac. It is a real low-poly mesh,
-not a sprite, so it holds up as an object standing on the road while the camera
-sways, dollies and orbits: it follows the road's bend, keeps its lane as the
-road is widened, casts a contact shadow and is mirrored in the wet surface
-along with everything else the Scene reflection slider covers.
+**Car** puts a Lamborghini Countach or a DMC DeLorean on the tarmac. Each is a
+real low-poly mesh built to its factory dimensions, not a sprite, so it holds
+up as an object standing on the road while the camera sways, dollies and
+orbits: it follows the road's bend, keeps its lane as the road is widened,
+casts a contact shadow and is mirrored in the wet surface along with
+everything else the Scene reflection slider covers.
 
 Which way it faces follows the world rather than a setting. The floor scrolling
 toward you means you are moving forward, so the car ahead is driving away;
-reverse the scroll and it turns into oncoming traffic with its four pop-up
-headlights raised. Wheels, speed streaks and tyre marks all run at the road's
-speed, so a stopped road parks it.
+reverse the scroll and it turns into oncoming traffic — the Countach raises
+its four pop-up headlights, while the DeLorean's fixed quad lamps simply
+light up, because a DeLorean's never popped. Wheels, speed streaks and tyre
+marks all run at the road's speed, so a stopped road parks it.
 
 Solid bodywork, a glowing wireframe or both at once, with body and accent
 colours, lane, distance, size, lights, underglow, speed streaks, tyre marks,
-drift and the rear wing. The underglow is strip lighting: it spills onto the
-road along the body's own outline rather than pooling in a circle, and it
-lights the ground only. The speed streaks come off the car itself and stream
-past it; the tyre marks are rubber laid down behind the wheels, wandering and
-patchy and fading out with distance. Between them they are what makes it read
-as driving rather than parked.
+drift and — on the Countach — the rear wing; the DeLorean never wore one, so
+its checkbox hides. Every ground effect is cut to the selected car: the
+underglow and shadow follow that body's own plan outline, the tyre marks land
+under its own wheelbase and track, and the wheels roll at their real
+diameters — the DeLorean's staggered rears turn slower than its fronts. The
+underglow is strip lighting: it spills onto the road along the body's own
+outline rather than pooling in a circle, and it lights the ground only. The
+speed streaks come off the car itself and stream past it; the tyre marks are
+rubber laid down behind the wheels, wandering and patchy and fading out with
+distance. Between them they are what makes it read as driving rather than
+parked.
 
 **Drift** hangs the tail out. The car keeps travelling down the road while its
 body sits across it, the speed streaks open into a cone, and all four tyres lay
