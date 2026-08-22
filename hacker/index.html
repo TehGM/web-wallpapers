@@ -39,6 +39,10 @@ const COMPANY_DATA = "Apple|A2AAAD;Microsoft|F25022;Google|4285F4;Amazon|FF9900;
 
 // Per-wallpaper readability tuning (mirrors Resources/Backgrounds/backgrounds.json).
 // Sparse: each entry states only what differs from BG_DEFAULT.
+//
+// The key IS the filename: assets/backgrounds/<key>.webp. An entry may still
+// override that with `file` if one ever needs a different name or format.
+const BG_EXT = ".webp";
 const BG_DEFAULT = {
   opacity: 0.20, scrim: 0.22, tint: "cyan", tintStrength: 0.05,
   focalX: 0.5, focalY: 0.45, zoom: 1.06, fit: "cover",
@@ -46,22 +50,22 @@ const BG_DEFAULT = {
 };
 const BG_ENTRIES = {
   // mask built from tiny names, right half; micro-text smeared hard
-  "mask-typography":     { file: "mask-typography.png",     opacity: 0.24, scrim: 0.18, focalX: 0.60, soften: 3.5, zoom: 1.04 },
+  "mask-typography":     { opacity: 0.24, scrim: 0.18, focalX: 0.60, soften: 3.5, zoom: 1.04 },
   // very dark, small lit mask — needs high opacity, almost no scrim
-  "mask-hoodie-dark":    { file: "mask-hoodie-dark.png",    opacity: 0.34, scrim: 0.08, focalY: 0.44, soften: 1.5, zoom: 1.04 },
+  "mask-hoodie-dark":    { opacity: 0.34, scrim: 0.08, focalY: 0.44, soften: 1.5, zoom: 1.04 },
   // brightest + busiest of the set: dimmed hardest, smeared most
-  "mask-smoke-wood":     { file: "mask-smoke-wood.jpg",     opacity: 0.12, scrim: 0.32, focalY: 0.40, soften: 4.0, zoom: 1.10, tintStrength: 0.08 },
+  "mask-smoke-wood":     { opacity: 0.12, scrim: 0.32, focalY: 0.40, soften: 4.0, zoom: 1.10, tintStrength: 0.08 },
   // dense micro-text over the whole frame; heavy soften leaves silhouette
-  "mask-legion-text":    { file: "mask-legion-text.jpg",    opacity: 0.19, scrim: 0.22, soften: 5.0, zoom: 1.04 },
+  "mask-legion-text":    { opacity: 0.19, scrim: 0.22, soften: 5.0, zoom: 1.04 },
   // darkest image here; ~3x the opacity of the bright ones, blue tint
-  "mask-anarchy-blue":   { file: "mask-anarchy-blue.png",   opacity: 0.46, scrim: 0.04, focalY: 0.48, soften: 1.5, zoom: 1.04, tint: "blue", tintStrength: 0.07 },
+  "mask-anarchy-blue":   { opacity: 0.46, scrim: 0.04, focalY: 0.48, soften: 1.5, zoom: 1.04, tint: "blue", tintStrength: 0.07 },
   // bold white handwriting is the hazard — smeared until it reads as texture
-  "mask-knowledge-free": { file: "mask-knowledge-free.jpg", opacity: 0.13, scrim: 0.28, focalX: 0.58, soften: 4.5, zoom: 1.06 },
+  "mask-knowledge-free": { opacity: 0.13, scrim: 0.28, focalX: 0.58, soften: 4.5, zoom: 1.06 },
   // well-behaved 3D render, close to default
-  "mask-hoodie-3d":      { file: "mask-hoodie-3d.jpg",      opacity: 0.28, scrim: 0.14, focalX: 0.52, focalY: 0.46, soften: 2.0, zoom: 1.05 },
+  "mask-hoodie-3d":      { opacity: 0.28, scrim: 0.14, focalX: 0.52, focalY: 0.46, soften: 2.0, zoom: 1.05 },
   // 200x199 (!) glitch art: contained + scale-capped instead of cover-fit,
   // or a 10x upscale turns it to mush
-  "glitch-skull":        { file: "glitch-skull.png",        opacity: 0.30, scrim: 0.08, focalY: 0.46, soften: 1.0, zoom: 1.0, drift: 14.0, fit: "contain", maxScale: 3.0, backdrop: "#000000" }
+  "glitch-skull":        { opacity: 0.30, scrim: 0.08, focalY: 0.46, soften: 1.0, zoom: 1.0, drift: 14.0, fit: "contain", maxScale: 3.0, backdrop: "#000000" }
 };
 
 /* ---------------------------------------------------------------------
@@ -329,6 +333,9 @@ RD.progressLabel = function () { return pick(RD.ProgressLabels) + " " + pick(RD.
 
 function slugOf(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, ""); }
 
+// assets/logos/<slug>.webp — one file per COMPANY_DATA entry.
+const LOGO_EXT = ".webp";
+
 const COMPANIES = (function () {
   const out = [];
   const rows = COMPANY_DATA.split(";");
@@ -347,7 +354,7 @@ const COMPANIES = (function () {
   return out;
 })();
 
-// Lazily loads assets/logos/{key}.png, caching the result — including
+// Lazily loads assets/logos/{key}.webp, caching the result — including
 // failures (cached as null) so a missing file is attempted only once.
 // Returns null until the image is decoded, so the monogram shows in the
 // meantime and nothing ever blocks the frame loop.
@@ -366,7 +373,7 @@ const Logos = (function () {
       const img = new Image();
       img.onload = function () { cache.set(company.key, img); };
       img.decoding = "async";
-      img.src = "assets/logos/" + company.key + ".png";
+      img.src = "assets/logos/" + company.key + LOGO_EXT;
       return null;
     },
     release: function (company) { cache.delete(company.key); }
@@ -674,7 +681,7 @@ class BackgroundLayer {
     const self = this;
     img.onload = function () { self.image = img; self._dirty = true; };
     img.decoding = "async";
-    img.src = "assets/backgrounds/" + (this.s.file || (key + ".png"));
+    img.src = "assets/backgrounds/" + (this.s.file || (key + BG_EXT));
   }
 
   update(dt) { this._time += dt; }

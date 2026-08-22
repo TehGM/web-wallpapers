@@ -83,7 +83,7 @@ invented tools, `synctl` and `meshctl`.
 
 `COMPANY_DATA` near the top of the file is the catalogue — `Name|RRGGBB`,
 267 entries, one brand colour each. A logo is loaded from
-`assets/logos/<slug>.png` (slug = name lower-cased, non-alphanumerics
+`assets/logos/<slug>.webp` (slug = name lower-cased, non-alphanumerics
 dropped) the first time it is needed and released once that company has had
 its turn; if the file is missing, a procedural monogram in the brand colour
 is drawn instead, so the panel never depends on an asset being there. The
@@ -247,8 +247,25 @@ layer is not being invalidated when its content changes.
 
 ## Assets
 
-- `assets/logos/*.png` — 267 company logos, one per `COMPANY_DATA` entry,
+Everything under `assets/` is **WebP**, and the loaders assume it: a logo is
+`assets/logos/<key>.webp` and a background is `assets/backgrounds/<key>.webp`,
+where the key is the `BG_ENTRIES` key. A background entry may override the
+filename with a `file` property if one ever needs a different name or format;
+nothing currently does. The extensions are the constants `LOGO_EXT` and
+`BG_EXT`.
+
+- `assets/logos/*.webp` — 267 company logos, one per `COMPANY_DATA` entry,
   mostly 256×256. These are the companies' trademarks, used here in parody.
-- `assets/backgrounds/*` — eight Anonymous-mask / glitch-art images, up to
-  1920×1080. Source and licence of these images are not recorded in the
+  A missing or undecodable file is not fatal: the panel falls back to a
+  procedural monogram, which also means a broken path fails *silently* —
+  check logos actually decode rather than assuming they do.
+- `assets/backgrounds/*.webp` — eight Anonymous-mask / glitch-art images, up
+  to 1920×1080. Source and licence of these images are not recorded in the
   repo.
+
+Converting both sets from PNG/JPEG to WebP took them from 3.33 MB to 1.65 MB
+(logos −33%, backgrounds −73%), which is download and disk only — once
+decoded, a frame costs exactly the same either way.
+
+`preview.jpg` stays JPEG on purpose: it is the Wallpaper Engine preview
+image, and WE's own format requirements govern it, not the page.
