@@ -1,0 +1,20 @@
+{
+	"contentrating" : "Everyone",
+	"description" : "The Hollywood hacker screen: a wall of green-on-black panels with code being typed, terminals scrolling, hex dumps, telemetry and progress bars, while a target-acquisition panel \"breaches\" one real company after another.",
+	"file" : "index.html",
+	"general" :
+	{
+		"properties" : {}
+	},
+	"preview" : "preview.jpg",
+	"tags" :
+	[
+		"Technology",
+		"Memes",
+		"Cyberpunk",
+		"Abstract"
+	],
+	"title" : "Hacker",
+	"type" : "web",
+	"visibility" : "public"
+}

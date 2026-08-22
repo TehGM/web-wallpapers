@@ -1,0 +1,2501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SYNAPSE//9 NODE CONSOLE</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;}
+  canvas{display:block;width:100vw;height:100vh;}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+"use strict";
+/* =====================================================================
+   Hacker — the Hollywood hacker-screen meme as a wallpaper. Began life as
+   a .NET MAUI desktop app and was ported to this single page; comments
+   that mention "the MAUI build" are explaining a choice inherited from it.
+
+   Purely visual parody. Nothing here performs networking, process
+   execution, file scanning or any real work: every character on screen is
+   procedurally generated fiction. The only files it ever loads are the
+   local logo/background images in ./assets.
+
+   Everything renders into one 2D <canvas> from a single rAF loop. Panels
+   are classes with update(dt)/drawContent(rect); PanelManager owns them
+   and lays them out, Dashboard draws background + panels + CRT overlays.
+   See README.md for the panel list and the window.__hacker test hook.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   Embedded data (no network requests)
+   ------------------------------------------------------------------ */
+
+// "Name|RRGGBB[|key];..."  — key only present when it differs from the
+// slug derived from the name.
+const COMPANY_DATA = "Apple|A2AAAD;Microsoft|F25022;Google|4285F4;Amazon|FF9900;Meta|0081FB;Netflix|E50914;Tesla|CC0000;NVIDIA|76B900;Intel|0068B5;AMD|ED1C24;IBM|0F62FE;Oracle|C74634;SAP|0FAAFF;Salesforce|00A1E0;Adobe|FF0000;Cisco|1BA0D7;Dell|007DB8;HP|0096D6;Lenovo|E2231A;Samsung|1428A0;Sony|5B7BD5;LG|A50034;Panasonic|0F5CA8;Toshiba|E60012;Hitachi|E60027;Xiaomi|FF6900;Huawei|CF0A2C;ASUS|00539B;Acer|83B81A;Nokia|124191;Ericsson|0082F0;Qualcomm|3253DC;Broadcom|CC092F;TSMC|C4262E;Micron|0084C6;SK Hynix|EC3E31;Texas Instruments|CC0000;Spotify|1DB954;Airbnb|FF5A5F;Uber|276EF1;Lyft|FF00BF;PayPal|003087;Stripe|635BFF;Block|00D64F;Shopify|96BF48;eBay|E53238;Etsy|F1641E;Zoom|2D8CFF;Slack|611F69;Dropbox|0061FF;X Corp|71767B;LinkedIn|0A66C2;Snap|FFFC00;Pinterest|E60023;Reddit|FF4500;TikTok|FE2C55;Twitch|9146FF;GitHub|8250DF;GitLab|FC6D26;Atlassian|0052CC;Zendesk|17494D;ServiceNow|62D84E;Workday|F38B00;VMware|607078;Red Hat|EE0000;Canonical|E95420;Mozilla|FF7139;Cloudflare|F38020;Akamai|009CDE;Fastly|FF282D;DigitalOcean|0080FF;Heroku|430098;MongoDB|00ED64;Redis|DC382D;Elastic|FEC514;Snowflake|29B5E8;Databricks|FF3621;Palantir|8A8D93;Splunk|65A637;CrowdStrike|FC0000;Palo Alto Networks|FA582D;Fortinet|EE3124;McAfee|C01818;Kaspersky|006D5C;Okta|007DC1;Twilio|F22F46;HubSpot|FF7A59;Intuit|365EBF;Autodesk|0696D7;Unity|4C5B6B;Figma|A259FF;Notion|9A9A97;Discord|5865F2;Telegram|26A5E4;Signal|3A76F0;WhatsApp|25D366;DoorDash|FF3008;Instacart|43B02A;Robinhood|00C805;Coinbase|0052FF;Klarna|FFB3C7;JPMorgan Chase|117ACA;Goldman Sachs|6B96C3;Morgan Stanley|187ABA;Bank of America|E31837;Citigroup|056DAE;Wells Fargo|D71E28;HSBC|DB0011;Barclays|00AEEF;Deutsche Bank|0018A8;UBS|E60100;BNP Paribas|00915A;Santander|EC0000;Visa|1A1F71;Mastercard|EB001B;American Express|016FD0;Discover|FF6000;Charles Schwab|009BDB;Fidelity|58B947;BlackRock|4D5358;Allianz|003781;AXA|00008F;ING|FF6200;Walmart|0071CE;Target|CC0000;Costco|005DAA;Home Depot|F96302;Lowe's|004990;IKEA|0058A3;Aldi|00457C;Lidl|0050AA;Carrefour|004E9F;Tesco|EE1C2E;Zara|6E6E6E;H&M|E50010;Uniqlo|FF0000;Nike|FA5400;Adidas|6E6E6E;Puma|D9001C;Under Armour|8A8A8A;Levi's|C41230;McDonald's|FFC72C;Burger King|D62300;KFC|E4002B;Subway|008C15;Starbucks|00704A;Dunkin|FF671F;Domino's|006491;Pizza Hut|EE3124;Coca-Cola|F40009;Pepsi|004B93;Nestle|8A9AA5;Unilever|1F36C7;Procter & Gamble|003DA5;Danone|005EB8;Heineken|008200;Red Bull|DB0A40;Monster|95D600;Hershey|6E4B3A;Mars|0000A0;Kellogg's|ED1C24;General Mills|0057B8;Toyota|EB0A1E;Honda|CC0000;Ford|003478;General Motors|0170CE;BMW|0066B1;Mercedes-Benz|A4AAAE;Audi|BB0A30;Volkswagen|001E50;Porsche|B12B28;Ferrari|DC0000;Lamborghini|DDB321;Nissan|C3002F;Hyundai|002C5F;Kia|BB162B;Volvo|003057;Subaru|013C74;Mazda|7A7A7A;Mitsubishi|E60012;Rivian|FFA724;Stellantis|243782;Boeing|0039A6;Airbus|00205B;Delta Air Lines|003366;United Airlines|002244;American Airlines|0078D2;Lufthansa|05164D;Emirates|D71921;Qatar Airways|5C0632;British Airways|075AAA;Air France|002157;KLM|00A1DE;Ryanair|073590;Southwest|304CB2;Qantas|E40000;FedEx|4D148C;UPS|FFB500;DHL|FFCC00;Maersk|42B0D5;AT&T|00A8E0;Verizon|CD040B;T-Mobile|E20074;Vodafone|E60000;Orange|FF7900;Telefonica|0066FF;Comcast|645FAA;Disney|113CCF;Warner Bros|004DB4;Paramount|0064FF;NBCUniversal|FDB913;HBO|5822B4;YouTube|FF0000;Vimeo|1AB7EA;BBC|8A8A8A;CNN|CC0000;Bloomberg|2800D7;Reuters|FF8000;Shell|FBCE07;BP|009B00;ExxonMobil|FE000C;Chevron|0054A4;TotalEnergies|ED0000;Siemens|009999;General Electric|3874BA;Honeywell|EE3124;3M|FF0000;Caterpillar|FFCD11;John Deere|367C2B;Bosch|EA0016;Philips|0B5ED7;ABB|FF000F;Schneider Electric|3DCD58;BASF|21A0D2;Bayer|89D329;Pfizer|0093D0;Moderna|D30000;Novartis|0460A9;Roche|0B41CD;AstraZeneca|830051;GSK|F36633;Sanofi|7A00E6;Merck|00857C;Eli Lilly|D52B1E;Medtronic|1010A0;Abbott|009CDE;Johnson & Johnson|D51900;Alibaba|FF6A00;Tencent|0052D9;Baidu|2932E1;JD.com|E1251B;ByteDance|325AB4;Nintendo|E60012;PlayStation|003791;Xbox|107C10;Electronic Arts|FF4747;Ubisoft|0AABE1;Epic Games|7A7A7A;Valve|66C0F4;Riot Games|D13639;Roblox|00A2FF;Rockstar Games|FCAF17;Capcom|0060A8;Sega|0060A8;Bandai Namco|FF6E00;Square Enix|4A6B8A;Konami|E60012";
+
+// Per-wallpaper readability tuning (mirrors Resources/Backgrounds/backgrounds.json).
+// Sparse: each entry states only what differs from BG_DEFAULT.
+const BG_DEFAULT = {
+  opacity: 0.20, scrim: 0.22, tint: "cyan", tintStrength: 0.05,
+  focalX: 0.5, focalY: 0.45, zoom: 1.06, fit: "cover",
+  maxScale: Infinity, soften: 2.0, drift: 9.0, backdrop: "#000000"
+};
+const BG_ENTRIES = {
+  // mask built from tiny names, right half; micro-text smeared hard
+  "mask-typography":     { file: "mask-typography.png",     opacity: 0.24, scrim: 0.18, focalX: 0.60, soften: 3.5, zoom: 1.04 },
+  // very dark, small lit mask — needs high opacity, almost no scrim
+  "mask-hoodie-dark":    { file: "mask-hoodie-dark.png",    opacity: 0.34, scrim: 0.08, focalY: 0.44, soften: 1.5, zoom: 1.04 },
+  // brightest + busiest of the set: dimmed hardest, smeared most
+  "mask-smoke-wood":     { file: "mask-smoke-wood.jpg",     opacity: 0.12, scrim: 0.32, focalY: 0.40, soften: 4.0, zoom: 1.10, tintStrength: 0.08 },
+  // dense micro-text over the whole frame; heavy soften leaves silhouette
+  "mask-legion-text":    { file: "mask-legion-text.jpg",    opacity: 0.19, scrim: 0.22, soften: 5.0, zoom: 1.04 },
+  // darkest image here; ~3x the opacity of the bright ones, blue tint
+  "mask-anarchy-blue":   { file: "mask-anarchy-blue.png",   opacity: 0.46, scrim: 0.04, focalY: 0.48, soften: 1.5, zoom: 1.04, tint: "blue", tintStrength: 0.07 },
+  // bold white handwriting is the hazard — smeared until it reads as texture
+  "mask-knowledge-free": { file: "mask-knowledge-free.jpg", opacity: 0.13, scrim: 0.28, focalX: 0.58, soften: 4.5, zoom: 1.06 },
+  // well-behaved 3D render, close to default
+  "mask-hoodie-3d":      { file: "mask-hoodie-3d.jpg",      opacity: 0.28, scrim: 0.14, focalX: 0.52, focalY: 0.46, soften: 2.0, zoom: 1.05 },
+  // 200x199 (!) glitch art: contained + scale-capped instead of cover-fit,
+  // or a 10x upscale turns it to mush
+  "glitch-skull":        { file: "glitch-skull.png",        opacity: 0.30, scrim: 0.08, focalY: 0.46, soften: 1.0, zoom: 1.0, drift: 14.0, fit: "contain", maxScale: 3.0, backdrop: "#000000" }
+};
+
+/* ---------------------------------------------------------------------
+   Theme
+   ------------------------------------------------------------------ */
+
+// Colours carry a small cache of quantised rgba() strings so the draw
+// loop can fade them without allocating a string per call.
+function mkColor(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return { r, g, b, css: "rgb(" + r + "," + g + "," + b + ")", _c: new Array(65) };
+}
+function fade(c, a) {
+  let q = (a * 64) | 0;
+  if (q < 0) q = 0; else if (q > 64) q = 64;
+  let s = c._c[q];
+  if (s === undefined) s = c._c[q] = "rgba(" + c.r + "," + c.g + "," + c.b + "," + (q / 64) + ")";
+  return s;
+}
+
+const T = {
+  Background:  mkColor("#04080A"),
+  PanelFill:   mkColor("#070D10"),   // drawn at 0.84 alpha — see PANEL_FILL
+  Green:       mkColor("#3CFF7A"),
+  DimGreen:    mkColor("#1E9A4C"),
+  DarkGreen:   mkColor("#0E4A26"),
+  Cyan:        mkColor("#2BE8F4"),
+  DimCyan:     mkColor("#15788A"),
+  Blue:        mkColor("#3B82F6"),
+  Orange:      mkColor("#FFA028"),
+  Red:         mkColor("#FF3B4A"),
+  DimRed:      mkColor("#7A1F26"),
+  Gray:        mkColor("#5E7A70"),
+  DimGray:     mkColor("#2C3E38"),
+  White:       mkColor("#D8FFE8"),
+  Black:       mkColor("#000000")
+};
+// Panels are translucent so the wallpaper stays faintly perceptible
+// through them without ever competing with text.
+const PANEL_FILL = fade(T.PanelFill, 0.84);
+
+const MONO = '"Consolas","Cascadia Mono","DejaVu Sans Mono","Courier New",monospace';
+function fontMono(size)     { return size + "px " + MONO; }
+function fontMonoBold(size) { return "700 " + size + "px " + MONO; }
+function lineHeight(size)   { return size * 1.35; }
+
+// Monospace advance width, measured once per size and cached. The MAUI
+// build hardcodes 0.55em (Consolas); measuring keeps layout and glyphs in
+// register even when a fallback font is substituted.
+const _cwCache = new Map();
+function charW(size) {
+  let w = _cwCache.get(size);
+  if (w === undefined) {
+    ctx.font = fontMono(size);
+    w = ctx.measureText("0000000000").width / 10;
+    _cwCache.set(size, w);
+  }
+  return w;
+}
+
+// Vertical extent of the full-block glyph relative to the "middle"
+// baseline, used to draw progress bars as rectangles instead of text —
+// see ProgressPanel.drawBar for why.
+const _blockCache = new Map();
+function blockMetrics(size) {
+  let m = _blockCache.get(size);
+  if (m === undefined) {
+    ctx.font = fontMono(size);
+    const t = ctx.measureText("█");
+    m = { asc: t.actualBoundingBoxAscent, desc: t.actualBoundingBoxDescent };
+    _blockCache.set(size, m);
+  }
+  return m;
+}
+
+// 25% dither, matching the ░ LIGHT SHADE glyph. Cached per colour — only
+// a handful of colours ever reach it.
+const _ditherCache = new Map();
+function ditherPattern(css) {
+  let p = _ditherCache.get(css);
+  if (p === undefined) {
+    const dc = document.createElement("canvas");
+    dc.width = 2; dc.height = 2;
+    const dx = dc.getContext("2d");
+    dx.fillStyle = css;
+    dx.fillRect(0, 0, 1, 1);
+    p = ctx.createPattern(dc, "repeat");
+    _ditherCache.set(css, p);
+  }
+  return p;
+}
+
+/* ---------------------------------------------------------------------
+   RNG + formatting helpers
+   ------------------------------------------------------------------ */
+
+const rnd = Math.random;
+function rndInt(a, b) {           // C# Rng.Next: [a,b) — or [0,a) with one arg
+  if (b === undefined) { b = a; a = 0; }
+  return a + ((rnd() * (b - a)) | 0);
+}
+function pick(arr) { return arr[(rnd() * arr.length) | 0]; }
+function shuffled(arr) {
+  const c = arr.slice();
+  for (let i = c.length - 1; i > 0; i--) {
+    const j = (rnd() * (i + 1)) | 0;
+    const t = c[i]; c[i] = c[j]; c[j] = t;
+  }
+  return c;
+}
+function takeShuffled(arr, n) { return shuffled(arr).slice(0, n); }
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// The MAUI build runs under a pl-PL culture, so plain (non-invariant)
+// numeric formats use a space group separator and a comma decimal mark.
+// These reproduce exactly what is on screen there.
+function n0(v) {                                  // "N0", culture
+  v = Math.round(v);
+  const neg = v < 0; if (neg) v = -v;
+  let s = String(v), out = "";
+  while (s.length > 3) { out = " " + s.slice(-3) + out; s = s.slice(0, -3); }
+  return (neg ? "-" : "") + s + out;
+}
+function n0i(v) {                                 // "N0", invariant
+  return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function fixC(v, d) { return v.toFixed(d).replace(".", ","); }   // culture decimals
+function n2i(v) {                                 // "N2", invariant
+  const p = v.toFixed(2).split(".");
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + p[1];
+}
+function padL(s, n) { s = String(s); return s.length >= n ? s : " ".repeat(n - s.length) + s; }
+function padR(s, n) { s = String(s); return s.length >= n ? s : s + " ".repeat(n - s.length); }
+function pad0(v, n) { const s = String(Math.trunc(v)); return s.length >= n ? s : "0".repeat(n - s.length) + s; }
+function rep(ch, n) { return n > 0 ? ch.repeat(n) : ""; }
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function hhmmss(d) { return pad0(d.getHours(),2)+":"+pad0(d.getMinutes(),2)+":"+pad0(d.getSeconds(),2); }
+
+/* ---------------------------------------------------------------------
+   RandomDataGenerator — every fictional string on screen
+   ------------------------------------------------------------------ */
+
+const RD = {};
+RD.Verbs = ["Loading","Parsing","Indexing","Verifying","Synchronizing","Updating","Initializing","Decoding","Processing","Generating","Validating","Routing","Monitoring","Allocating","Compiling","Refreshing","Rebuilding","Mapping","Caching","Merging","Streaming","Balancing","Encoding","Expanding","Compressing","Normalizing","Resolving","Linking","Optimizing","Migrating","Replicating","Aggregating","Buffering","Scheduling","Batching","Hydrating","Pruning","Sharding","Warming","Flushing","Reconciling","Annealing","Coalescing","Partitioning","Vacuuming","Interleaving","Checkpointing","Draining","Promoting","Demoting","Rebasing","Splicing","Materializing","Deduplicating","Fencing","Quiescing","Snapshotting","Rekeying","Attesting","Journaling"];
+RD.Objects = ["module","record set","integrity table","node cluster","cache tier","subsystem","archive block","packet group","report bundle","signature chain","message queue","telemetry frame","memory arena","resource graph","index shard","metadata layer","session pool","vector store","checkpoint","manifest","dependency tree","symbol table","stream buffer","routing table","handshake token","descriptor page","snapshot delta","quorum state","lease registry","heartbeat channel","replica journal","entropy pool","config overlay","worker lattice","pipeline stage","trust anchor","delta log","bloom filter","write barrier","commit fence","epoch marker","shadow page","spill file","intent log","gossip round","merkle frontier","compaction window","watermark set","tombstone run","fanout tree","backfill queue","cursor lease","hot partition","cold segment","sync horizon","witness slate","ballot chain"];
+RD.Qualifiers = ["primary","secondary","distributed","encrypted","compressed","mirrored","deferred","transient","persistent","volatile","adaptive","quantized","recursive","parallel","asynchronous","redundant","orphaned","stale","pinned","shadow","speculative","immutable","ephemeral","federated","opportunistic","lazy","eager","hierarchical","monotonic","idempotent"];
+RD.OkTags = ["OK","DONE","PASS","READY","SYNCED","STABLE","ACK","SEALED"];
+RD.WarnTags = ["SLOW","RETRY","DEFER","PARTIAL","DEGRADED","QUEUED"];
+RD.FailTags = ["FAIL","TIMEOUT","REJECTED","DROPPED","MISMATCH"];
+RD.Subsystems = ["kernel","netmesh","cryptcore","datavault","relay","sentinel","flux","lattice","hyperbus","oracle","prism","vector","quantum","cipher","nexus","helix","raster","pulse","onyx","zenith","ember","cobalt","argon","krypton","basalt","meridian","sable","corona","talos","vertex","aurora","granite","osmium","cinder","harbor","signet"];
+RD.ErrorEvents = ["Integrity mismatch","Packet discarded","Node timeout","Recovery initiated","Resynchronizing","Rebuilding cache","Fallback activated","Checksum drift","Quorum lost","Latency spike","Buffer overrun contained","Replica lag","Clock skew detected","Lease expired","Split-brain averted","Backpressure engaged","Epoch rollback","Journal gap","Fencing token rejected","Watchdog tripped","Cold shard evicted"];
+RD.ProgressLabels = ["SYNCHRONIZING","VERIFYING","OPTIMIZING","INDEXING","DECRYPTING","COMPILING","MIGRATING","REPLICATING","DEFRAGMENTING","CALIBRATING","UPLINKING","STAGING","REKEYING","COMPACTING","TRANSCODING","RESOLVING","ANNEALING","RECONCILING","MATERIALIZING","CHECKPOINTING","REBALANCING","PARTITIONING","COALESCING","ATTESTING","VACUUMING","SPLICING","BACKFILLING","QUIESCING"];
+RD.CompanySteps = ["Initializing analysis...","Collecting metadata...","Building dependency graph...","Correlating public assets...","Indexing infrastructure...","Evaluating exposure model...","Synchronizing datasets...","Scanning reference archive...","Cross-checking repositories...","Compiling findings...","Processing relationships...","Resolving asset topology...","Weighing lattice heuristics...","Aligning spectral signatures...","Bootstrapping inference core...","Tracing shadow manifests...","Enumerating surface vectors...","Deriving correlation matrix...","Sampling entropy horizon...","Fusing observation layers...","Ranking topology candidates...","Walking dependency closure...","Projecting influence graph...","Distilling fingerprint set...","Replaying archive timeline...","Interpolating missing edges...","Scoring anomaly clusters...","Consolidating evidence chain...","Normalizing spectral basis...","Priming heuristic ensemble..."];
+RD.StatDefs = [["NODES",120,9000],["SESSIONS",800,42000],["CHANNELS",40,3200],["THREADS",200,18000],["WORKERS",64,4096],["PIPELINES",12,640],["CACHES",30,1500],["QUEUES",18,980],["BUFFERS",500,90000],["REPOS",80,7400],["ENDPOINTS",150,22000],["CLUSTERS",6,220]];
+
+const HEXD = "0123456789ABCDEF";
+RD.hex = function (digits) {
+  let s = "";
+  for (let i = 0; i < digits; i++) s += HEXD[(rnd() * 16) | 0];
+  return s;
+};
+RD.nodeId = function () { return pick(RD.Subsystems) + "-" + pad0(rndInt(1, 99), 2); };
+const SIZE_UNITS = ["KB","MB","GB","TB"];
+RD.sizeToken = function () { return rndInt(1, 999) + "." + rndInt(0, 9) + " " + pick(SIZE_UNITS); };
+
+// Line kinds → colours (mirrors Panel.KindColor)
+const K_NORMAL = 0, K_INFO = 1, K_WARN = 2, K_ERROR = 3, K_SUCCESS = 4;
+function kindColor(k) {
+  return k === K_ERROR ? T.Red : k === K_WARN ? T.Orange
+       : k === K_SUCCESS ? T.Green : k === K_INFO ? T.Cyan : T.DimGreen;
+}
+
+RD.systemLogLine = function () {
+  const roll = rndInt(100);
+  const time = hhmmss(new Date());
+  if (roll < 5)  return { t: "[" + time + "] !! " + pick(RD.Verbs) + " " + pick(RD.Objects) + " :: " + pick(RD.FailTags) + " 0x" + RD.hex(4), k: K_ERROR };
+  if (roll < 12) return { t: "[" + time + "] ~  " + pick(RD.Qualifiers) + " " + pick(RD.Objects) + " " + pick(RD.WarnTags) + " (" + rndInt(1, 400) + " ms)", k: K_WARN };
+  if (roll < 24) return { t: "[" + time + "] ++ " + pick(RD.Verbs) + " " + pick(RD.Objects) + " complete [" + pick(RD.OkTags) + "]", k: K_SUCCESS };
+  if (roll < 34) return { t: "[" + time + "] :: seg 0x" + RD.hex(8) + " -> 0x" + RD.hex(8) + " (" + RD.sizeToken() + ")", k: K_INFO };
+  switch (roll % 5) {
+    case 0: return { t: "[" + time + "]    " + pick(RD.Verbs) + " " + pick(RD.Qualifiers) + " " + pick(RD.Objects) + " " + rndInt(1, 64) + "/" + rndInt(64, 128), k: K_NORMAL };
+    case 1: return { t: "[" + time + "]    " + pick(RD.Verbs) + " " + pick(RD.Objects) + " @ " + RD.nodeId() + " .. " + rndInt(1, 100) + "%", k: K_NORMAL };
+    case 2: return { t: "[" + time + "]    worker-" + pad0(rndInt(0, 64), 2) + " " + pick(RD.Verbs).toLowerCase() + " " + pick(RD.Objects) + " (" + rndInt(1, 900) + " pending)", k: K_NORMAL };
+    case 3: return { t: "[" + time + "] .. " + pick(RD.Subsystems) + ": load=" + rndInt(0, 9) + "." + pad0(rndInt(0, 99), 2) + " rss=" + RD.sizeToken() + " fd=" + rndInt(16, 4096), k: K_NORMAL };
+    default: return { t: "[" + time + "]    " + pick(RD.Verbs) + " " + pick(RD.Objects) + ": " + RD.sizeToken() + " in " + rndInt(2, 900) + " ms", k: K_NORMAL };
+  }
+};
+
+RD.eventFeedLine = function () {
+  const roll = rndInt(100);
+  if (roll < 6)  return { t: "▲ " + pick(RD.ErrorEvents), k: K_ERROR };
+  if (roll < 14) return { t: "● " + RD.nodeId() + " " + pick(RD.WarnTags).toLowerCase(), k: K_WARN };
+  return { t: "▸ " + RD.nodeId() + " :: " + pick(RD.Verbs).toLowerCase() + " " + pick(RD.Objects), k: K_NORMAL };
+};
+
+RD.progressLabel = function () { return pick(RD.ProgressLabels) + " " + pick(RD.Objects).toUpperCase(); };
+
+/* ---------------------------------------------------------------------
+   Company catalogue + logo cache
+   ------------------------------------------------------------------ */
+
+function slugOf(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, ""); }
+
+const COMPANIES = (function () {
+  const out = [];
+  const rows = COMPANY_DATA.split(";");
+  for (let i = 0; i < rows.length; i++) {
+    const p = rows[i].split("|");
+    if (p.length < 2 || !p[0]) continue;
+    const name = p[0];
+    const key = p.length > 2 && p[2] ? p[2] : slugOf(name);
+    // Up to three initials for the procedural monogram fallback.
+    const words = name.split(" ").filter(function (w) { return w.length > 0; });
+    const initials = words.length === 1
+      ? name.slice(0, Math.min(2, name.length)).toUpperCase()
+      : words.slice(0, 3).map(function (w) { return w[0].toUpperCase(); }).join("");
+    out.push({ name: name, key: key, accent: mkColor("#" + p[1]), initials: initials });
+  }
+  return out;
+})();
+
+// Lazily loads assets/logos/{key}.png, caching the result — including
+// failures (cached as null) so a missing file is attempted only once.
+// Returns null until the image is decoded, so the monogram shows in the
+// meantime and nothing ever blocks the frame loop.
+//
+// Entries are released once the company has had its turn: the deck is
+// 267 long and a full pass takes well over an hour, so keeping every logo
+// would slowly pin all of them decoded (~60 MB worst case) for nothing —
+// re-reading a few-KB local file on the next pass is free.
+const Logos = (function () {
+  const cache = new Map();
+  return {
+    get: function (company) {
+      const hit = cache.get(company.key);
+      if (hit !== undefined) return hit;
+      cache.set(company.key, null);
+      const img = new Image();
+      img.onload = function () { cache.set(company.key, img); };
+      img.decoding = "async";
+      img.src = "assets/logos/" + company.key + ".png";
+      return null;
+    },
+    release: function (company) { cache.delete(company.key); }
+  };
+})();
+
+/* ---------------------------------------------------------------------
+   Canvas bootstrap
+   ------------------------------------------------------------------ */
+
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d", { alpha: false });
+let VW = 0, VH = 0, DPR = 1;
+
+function resize() {
+  // Cap the device pixel ratio: as a wallpaper this may run full-screen on
+  // a 4K panel, where rendering at 2x costs 4x the fill rate for detail
+  // nobody looks at.
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  VW = Math.max(320, window.innerWidth);
+  VH = Math.max(240, window.innerHeight);
+  canvas.width = Math.round(VW * DPR);
+  canvas.height = Math.round(VH * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.textBaseline = "middle";
+  _cwCache.clear();
+  _blockCache.clear();
+  onResize();
+}
+
+// Rounded rectangle with a fallback for engines without ctx.roundRect.
+function roundRect(x, y, w, h, r) {
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  if (r > w / 2) r = w / 2;
+  if (r > h / 2) r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// MAUI's DrawString(rect, align, VerticalAlignment.Center) equivalents.
+// textBaseline stays "middle" for the whole run (set once at startup), so
+// passing the rect's vertical centre matches MAUI's centred alignment.
+function textL(s, x, y, h) { ctx.textAlign = "left";   ctx.fillText(s, x, y + h / 2); }
+function textR(s, x, w, y, h) { ctx.textAlign = "right"; ctx.fillText(s, x + w, y + h / 2); }
+function textC(s, x, w, y, h) { ctx.textAlign = "center"; ctx.fillText(s, x + w / 2, y + h / 2); }
+
+/* ---------------------------------------------------------------------
+   Panel base
+   ------------------------------------------------------------------ */
+
+const TITLE_BAR_H = 18, PAD = 6;
+
+class Panel {
+  constructor() {
+    this.x = 0; this.y = 0; this.w = 0; this.h = 0;
+    this.title = "";
+    this.accent = T.Green;
+    this._pulse = rnd() * Math.PI * 2;
+  }
+  update(dt) { this._pulse += dt * 1.5; }
+  contentRect() {
+    const top = this.title ? TITLE_BAR_H + PAD / 2 : PAD;
+    return {
+      x: this.x + PAD, y: this.y + top,
+      w: this.w - PAD * 2, h: this.h - top - PAD
+    };
+  }
+  render() {
+    const b = this;
+    if (b.w < 20 || b.h < 20) return;
+
+    ctx.fillStyle = PANEL_FILL;
+    roundRect(b.x, b.y, b.w, b.h, 4); ctx.fill();
+
+    // Neon border: soft outer glow stroke + crisp inner stroke.
+    const glow = 0.35 + 0.15 * Math.sin(this._pulse);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = fade(this.accent, glow * 0.5);
+    roundRect(b.x, b.y, b.w, b.h, 4); ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = fade(this.accent, 0.9);
+    roundRect(b.x, b.y, b.w, b.h, 4); ctx.stroke();
+
+    if (this.title) {
+      ctx.fillStyle = fade(this.accent, 0.10);
+      roundRect(b.x, b.y, b.w, TITLE_BAR_H, 4); ctx.fill();
+      ctx.font = fontMonoBold(10);
+      ctx.fillStyle = this.accent.css;
+      textL("┃ " + this.title, b.x + 6, b.y, TITLE_BAR_H);
+
+      const dotA = 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2));
+      ctx.fillStyle = fade(this.accent, dotA);
+      ctx.beginPath();
+      ctx.arc(b.x + b.w - 10, b.y + TITLE_BAR_H / 2, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const r = this.contentRect();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    this.drawContent(r);
+    ctx.restore();
+  }
+  drawContent(_r) {}
+}
+
+/* ---------------------------------------------------------------------
+   Wallpaper layer
+   ------------------------------------------------------------------ */
+
+// Blur tap offsets in units of the soften radius (mirrors BackgroundLayer).
+const AXIAL_TAPS = [[-1,0],[1,0],[0,-1],[0,1]];
+const RING_TAPS = [[-1,0],[1,0],[0,-1],[0,1],[-0.7,-0.7],[0.7,-0.7],[-0.7,0.7],[0.7,0.7]];
+
+class BackgroundLayer {
+  constructor(key) {
+    this.key = key;
+    const e = BG_ENTRIES[key] || {};
+    this.s = Object.assign({}, BG_DEFAULT, e);
+    this.tint = this.s.tint === "blue" ? T.Blue : this.s.tint === "green" ? T.Green : T.Cyan;
+    this.backdrop = this.s.backdrop;
+    this.image = null;
+    this._baked = null;       // pre-composited blurred wallpaper
+    this._bakedPad = 0;
+    this._overlay = null;     // pre-composited scrim + tint + edge falloff
+    this._time = 0;
+    this._dirty = true;
+
+    const img = new Image();
+    const self = this;
+    img.onload = function () { self.image = img; self._dirty = true; };
+    img.decoding = "async";
+    img.src = "assets/backgrounds/" + (this.s.file || (key + ".png"));
+  }
+
+  update(dt) { this._time += dt; }
+  invalidate() { this._dirty = true; }
+
+  // The MAUI build composites 9 image copies every frame to fake a blur.
+  // That is 9 full-screen textured draws at 60fps, which a wallpaper cannot
+  // afford — so the identical composite is baked once into an offscreen
+  // canvas and blitted with a single drawImage per frame instead.
+  _bake() {
+    this._dirty = false;
+    this._baked = null;
+    this._overlay = null;
+    if (!this.image || !VW || !VH) return;
+
+    const iw = this.image.naturalWidth, ih = this.image.naturalHeight;
+    if (!iw || !ih) return;
+
+    const s = this.s;
+    const fit = s.fit === "contain"
+      ? Math.min(VW / iw, VH / ih)
+      : Math.max(VW / iw, VH / ih);
+    const scale = Math.min(fit * s.zoom, s.maxScale);
+    this._w = iw * scale;
+    this._h = ih * scale;
+
+    const pad = s.soften > 0.5 ? Math.ceil(s.soften) + 2 : 0;
+    this._bakedPad = pad;
+
+    const bc = document.createElement("canvas");
+    bc.width = Math.max(1, Math.ceil(this._w + pad * 2));
+    bc.height = Math.max(1, Math.ceil(this._h + pad * 2));
+    const bx = bc.getContext("2d");
+
+    if (s.soften > 0.5) {
+      const taps = s.soften > 2.5 ? RING_TAPS : AXIAL_TAPS;
+      bx.globalAlpha = s.opacity * (taps.length === 8 ? 0.20 : 0.35);
+      for (let i = 0; i < taps.length; i++) {
+        bx.drawImage(this.image, pad + taps[i][0] * s.soften, pad + taps[i][1] * s.soften, this._w, this._h);
+      }
+    }
+    bx.globalAlpha = s.opacity;
+    bx.drawImage(this.image, pad, pad, this._w, this._h);
+    bx.globalAlpha = 1;
+    this._baked = bc;
+
+    // Scrim + palette tint + edge falloff are screen-fixed and never move,
+    // so they bake into one screen-sized RGBA overlay drawn in a single call.
+    const oc = document.createElement("canvas");
+    oc.width = Math.max(1, Math.round(VW));
+    oc.height = Math.max(1, Math.round(VH));
+    const ox = oc.getContext("2d");
+    ox.fillStyle = fade(T.Black, s.scrim);
+    ox.fillRect(0, 0, VW, VH);
+    ox.fillStyle = fade(this.tint, s.tintStrength);
+    ox.fillRect(0, 0, VW, VH);
+    ox.save();
+    ox.translate(VW / 2, VH / 2);
+    ox.scale(VW, VH);
+    const g = ox.createRadialGradient(0, 0, 0, 0, 0, 0.8);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(0.55, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.35)");
+    ox.fillStyle = g;
+    ox.fillRect(-0.5, -0.5, 1, 1);
+    ox.restore();
+    this._overlay = oc;
+  }
+
+  draw(glitch) {
+    if (this._dirty) this._bake();
+    if (!this._baked) return;
+
+    const s = this.s, w = this._w, h = this._h;
+    let x, y;
+    if (w >= VW && h >= VH) {
+      // Cover: pan within the overflow, never far enough to expose an edge.
+      const slackX = w - VW, slackY = h - VH;
+      x = -slackX * s.focalX + Math.sin(this._time * 0.061) * Math.min(s.drift, slackX * 0.5);
+      y = -slackY * s.focalY + Math.cos(this._time * 0.043) * Math.min(s.drift, slackY * 0.5);
+    } else {
+      // Contained: smaller than the screen, so it is placed by focal point
+      // and free to drift — the art already sits on black.
+      x = (VW - w) * s.focalX + Math.sin(this._time * 0.061) * s.drift;
+      y = (VH - h) * s.focalY + Math.cos(this._time * 0.043) * s.drift;
+    }
+    x += glitch * 6;
+
+    const p = this._bakedPad;
+    ctx.drawImage(this._baked, x - p, y - p);
+    if (this._overlay) ctx.drawImage(this._overlay, 0, 0);
+  }
+}
+
+const BG_KEYS = Object.keys(BG_ENTRIES);
+
+/* ---------------------------------------------------------------------
+   Panels
+   ------------------------------------------------------------------ */
+
+/** Continuously scrolling fake terminal with a normal/paused/burst state
+ *  machine so multiple terminals never scroll in lockstep. */
+class TerminalPanel extends Panel {
+  constructor(title, accent, generator, baseRate, fontSize) {
+    super();
+    this.title = title;
+    this.accent = accent;
+    this.gen = generator;
+    this.fontSize = fontSize || 11;
+    this.baseRate = (baseRate || 4) * (0.7 + rnd() * 0.8);
+    this.lines = [];
+    this.mode = 0;                 // 0 normal, 1 paused, 2 burst
+    this.modeTimer = 2 + rnd() * 5;
+    this.acc = 0;
+    for (let i = 0; i < 20; i++) this.emit();
+  }
+  emit() {
+    const l = this.gen();
+    this.lines.push(l);
+    if (this.lines.length > 90) this.lines.splice(0, this.lines.length - 90);
+  }
+  update(dt) {
+    super.update(dt);
+    this.modeTimer -= dt;
+    if (this.modeTimer <= 0) {
+      const roll = rndInt(100);
+      if (roll < 12)      { this.mode = 1; this.modeTimer = 1.0 + rnd() * 2.5; }
+      else if (roll < 30) { this.mode = 2; this.modeTimer = 0.6 + rnd() * 1.6; }
+      else                { this.mode = 0; this.modeTimer = 2.0 + rnd() * 6.0; }
+    }
+    const rate = this.mode === 1 ? 0 : this.mode === 2 ? this.baseRate * 10 : this.baseRate;
+    this.acc += rate * dt;
+    while (this.acc >= 1) { this.acc -= 1; this.emit(); }
+  }
+  drawContent(r) {
+    const fs = this.fontSize;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs);
+    const cw = charW(fs);
+    const visible = Math.max(1, (r.h / lh) | 0);
+    const start = Math.max(0, this.lines.length - visible);
+    const maxChars = Math.max(8, (r.w / cw) | 0);
+
+    let y = r.y + r.h - lh;
+    for (let i = this.lines.length - 1; i >= start; i--, y -= lh) {
+      const line = this.lines[i];
+      const text = line.t.length > maxChars ? line.t.slice(0, maxChars) : line.t;
+      // Newest lines are brightest; older ones fade slightly.
+      const age = (this.lines.length - 1 - i) / visible;
+      ctx.fillStyle = fade(kindColor(line.k), 1 - age * 0.55);
+      textL(text, r.x, y, lh);
+    }
+    if (this.mode !== 1 && (Date.now() % 1000) < 500) {
+      ctx.fillStyle = this.accent.css;
+      ctx.fillRect(r.x, r.y + r.h - 3, cw, 2.5);
+    }
+  }
+}
+
+/** Fake hex viewer: offset column, hex bytes, ASCII column. */
+class HexPanel extends Panel {
+  constructor() {
+    super();
+    this.title = "MEMORY INSPECTOR";
+    this.accent = T.Cyan;
+    this.rows = [];
+    this.rate = 5 + rnd() * 6;
+    this.offset = rndInt(1 << 20) * 16;
+    this.acc = 0;
+    for (let i = 0; i < 30; i++) this.emit();
+  }
+  emit() {
+    let hex = "", ascii = "";
+    for (let i = 0; i < 8; i++) {
+      const b = (rnd() * 256) | 0;
+      hex += HEXD[(b >> 4) & 15] + HEXD[b & 15] + " ";
+      ascii += (b >= 33 && b <= 126) ? String.fromCharCode(b) : ".";
+    }
+    let off = this.offset.toString(16).toUpperCase();
+    if (off.length < 8) off = "0".repeat(8 - off.length) + off;
+    this.rows.push({ t: "0x" + off + "  " + hex + " " + ascii, hl: rndInt(100) < 6 });
+    if (this.rows.length > 60) this.rows.splice(0, this.rows.length - 60);
+    this.offset += 8;
+  }
+  update(dt) {
+    super.update(dt);
+    this.acc += this.rate * dt;
+    while (this.acc >= 1) { this.acc -= 1; this.emit(); }
+  }
+  drawContent(r) {
+    ctx.font = fontMono(10);
+    const lh = lineHeight(10);
+    const visible = Math.max(1, (r.h / lh) | 0);
+    const start = Math.max(0, this.rows.length - visible);
+    let y = r.y + r.h - lh;
+    for (let i = this.rows.length - 1; i >= start; i--, y -= lh) {
+      const row = this.rows[i];
+      if (row.hl) {
+        ctx.fillStyle = fade(T.Cyan, 0.14);
+        ctx.fillRect(r.x, y + 2, r.w, lh - 2);
+        ctx.fillStyle = T.White.css;
+      } else {
+        ctx.fillStyle = T.DimCyan.css;
+      }
+      textL(row.t, r.x, y, lh);
+    }
+  }
+}
+
+/** Binary stream with occasional highlighted (orange) segments. */
+class BinaryPanel extends Panel {
+  constructor() {
+    super();
+    this.title = "RAW STREAM";
+    this.accent = T.DimGreen;
+    this.rows = [];
+    this.rate = 8 + rnd() * 8;
+    this.acc = 0;
+    this.cols = 48;
+  }
+  emit() {
+    let s = "";
+    for (let i = 0; i < this.cols; i++) s += (rnd() < 0.5 ? "0" : "1");
+    let hs = -1, hl = 0;
+    if (rndInt(100) < 18) {
+      hl = rndInt(4, 14);
+      hs = rndInt(0, Math.max(1, this.cols - hl));
+    }
+    this.rows.push({ b: s, hs: hs, hl: hl });
+    if (this.rows.length > 40) this.rows.splice(0, this.rows.length - 40);
+  }
+  update(dt) {
+    super.update(dt);
+    this.acc += this.rate * dt;
+    while (this.acc >= 1) { this.acc -= 1; this.emit(); }
+  }
+  drawContent(r) {
+    const cw = charW(10);
+    this.cols = Math.max(16, (r.w / cw) | 0);
+    ctx.font = fontMono(10);
+    const lh = lineHeight(10) * 0.9;
+    const visible = Math.max(1, (r.h / lh) | 0);
+    const start = Math.max(0, this.rows.length - visible);
+    let y = r.y + r.h - lh;
+    const dim = fade(T.DimGreen, 0.75);
+    for (let i = this.rows.length - 1; i >= start; i--, y -= lh) {
+      const row = this.rows[i];
+      const bits = row.b.length > this.cols ? row.b.slice(0, this.cols) : row.b;
+      ctx.fillStyle = dim;
+      textL(bits, r.x, y, lh);
+      // Redraw the highlighted slice in orange on top; monospace keeps the
+      // overlay in register with the base text.
+      if (row.hs >= 0 && row.hs + row.hl <= bits.length) {
+        const x = r.x + row.hs * cw;
+        ctx.fillStyle = fade(T.Orange, 0.15);
+        ctx.fillRect(x - 1, y + 2, row.hl * cw + 2, lh - 2);
+        ctx.fillStyle = T.Orange.css;
+        textL(bits.substr(row.hs, row.hl), x, y, lh);
+      }
+    }
+  }
+}
+
+/** Smoothly animating line charts plus an optional strip of counters. */
+const GRAPH_CATALOG = [
+  ["CPU LOAD", "%", T.Green], ["MEMORY", "%", T.Cyan], ["BANDWIDTH", "Gb/s", T.Blue],
+  ["REQ RATE", "k/s", T.Orange], ["SIGNAL", "dB", T.Green], ["LATENCY", "ms", T.Cyan],
+  ["NODE COUNT", "", T.Blue]
+];
+const HISTORY_LEN = 110, SAMPLE_INTERVAL = 0.10;
+
+class GraphPanel extends Panel {
+  constructor(count, horizontal, counters) {
+    super();
+    this.title = "TELEMETRY";
+    this.accent = T.Blue;
+    this.horizontal = !!horizontal;
+
+    this.counters = takeShuffled(RD.StatDefs, counters || 0).map(function (d) {
+      const start = d[1] + rnd() * (d[2] - d[1]);
+      return { label: d[0], min: d[1], max: d[2], value: start, target: start, retarget: rnd() * 2, trend: 0 };
+    });
+
+    this.series = takeShuffled(GRAPH_CATALOG, count).map(function (p) {
+      const v = 0.3 + rnd() * 0.4;
+      const s = {
+        label: p[0], unit: p[1], color: p[2],
+        history: new Float32Array(HISTORY_LEN), head: 0,
+        value: v, target: rnd(), retarget: rnd() * 2,
+        wobble: rnd() * Math.PI * 2, sampleAcc: 0
+      };
+      s.history.fill(v);
+      return s;
+    });
+  }
+  update(dt) {
+    super.update(dt);
+    for (let i = 0; i < this.series.length; i++) {
+      const s = this.series[i];
+      s.retarget -= dt;
+      if (s.retarget <= 0) {
+        s.target = 0.08 + rnd() * 0.84;
+        s.retarget = 1.5 + rnd() * 4.0;
+      }
+      // Smooth pursuit of the target + gentle wobble.
+      s.wobble += dt * (1.2 + rnd() * 0.3);
+      s.value += (s.target - s.value) * Math.min(1, dt * 1.8);
+      const display = clamp(s.value + Math.sin(s.wobble) * 0.045, 0.02, 0.98);
+      s.sampleAcc += dt;
+      while (s.sampleAcc >= SAMPLE_INTERVAL) {
+        s.sampleAcc -= SAMPLE_INTERVAL;
+        s.history[s.head] = display;
+        s.head = (s.head + 1) % HISTORY_LEN;
+      }
+    }
+    for (let i = 0; i < this.counters.length; i++) {
+      const c = this.counters[i];
+      c.retarget -= dt;
+      if (c.retarget <= 0) {
+        const span = (c.max - c.min) * (0.02 + rnd() * 0.12);
+        c.target = clamp(c.target + (rndInt(2) === 0 ? -span : span), c.min, c.max);
+        c.retarget = 0.8 + rnd() * 2.5;
+        c.trend = Math.sign(c.target - c.value);
+      }
+      c.value += (c.target - c.value) * Math.min(1, dt * 2.2);
+    }
+  }
+  drawContent(r) {
+    let chart = r;
+    if (this.counters.length > 0) {
+      const cw = Math.min(130, r.w * 0.26);
+      chart = { x: r.x, y: r.y, w: r.w - cw - 10, h: r.h };
+      this.drawCounters({ x: chart.x + chart.w + 10, y: r.y, w: cw, h: r.h });
+    }
+    if (this.horizontal) {
+      const slotW = chart.w / this.series.length;
+      for (let i = 0; i < this.series.length; i++)
+        this.drawSeries(this.series[i], { x: chart.x + i * slotW, y: chart.y, w: slotW - 8, h: chart.h });
+    } else {
+      const slotH = chart.h / this.series.length;
+      for (let i = 0; i < this.series.length; i++)
+        this.drawSeries(this.series[i], { x: chart.x, y: chart.y + i * slotH, w: chart.w, h: slotH - 4 });
+    }
+  }
+  drawCounters(r) {
+    const cellH = r.h / this.counters.length;
+    for (let i = 0; i < this.counters.length; i++) {
+      const c = this.counters[i];
+      const y = r.y + i * cellH;
+      ctx.font = fontMono(8.5);
+      ctx.fillStyle = T.Gray.css;
+      textL(c.label, r.x, y + 1, 10);
+      const arrow = c.trend > 0 ? "▲" : c.trend < 0 ? "▼" : " ";
+      ctx.fillStyle = (c.trend >= 0 ? T.Green : T.Orange).css;
+      textR(arrow, r.x, r.w - 2, y + 1, 10);
+      ctx.font = fontMonoBold(14);
+      ctx.fillStyle = T.White.css;
+      textL(n0(Math.trunc(c.value)), r.x, y + 11, cellH - 12);
+    }
+  }
+  drawSeries(s, r) {
+    const labelH = 13;
+    const cx = r.x, cy = r.y + labelH, cw = r.w, ch = r.h - labelH;
+
+    ctx.font = fontMonoBold(9.5);
+    ctx.fillStyle = s.color.css;
+    textL(s.label, r.x, r.y, labelH);
+
+    const cur = s.history[(s.head + HISTORY_LEN - 1) % HISTORY_LEN];
+    let valueText;
+    switch (s.unit) {
+      case "%":    valueText = fixC(cur * 100, 1) + "%"; break;
+      case "ms":   valueText = fixC(cur * 240 + 4, 1) + " ms"; break;
+      case "dB":   valueText = fixC(-20 - (1 - cur) * 60, 1) + " dB"; break;
+      case "Gb/s": valueText = fixC(cur * 38, 2) + " Gb/s"; break;
+      case "k/s":  valueText = Math.round(cur * 840) + " k/s"; break;
+      default:     valueText = String(Math.round(cur * 4200));
+    }
+    ctx.fillStyle = T.White.css;
+    textR(valueText, r.x, r.w, r.y, labelH);
+
+    // Faint grid
+    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = fade(T.DimGray, 0.5);
+    ctx.beginPath();
+    for (let g = 1; g < 3; g++) {
+      const gy = Math.round(cy + ch * g / 3) + 0.5;
+      ctx.moveTo(cx, gy); ctx.lineTo(cx + cw, gy);
+    }
+    ctx.stroke();
+
+    // Polyline, oldest → newest, with a translucent fill beneath it.
+    const stepX = cw / (HISTORY_LEN - 1);
+    ctx.beginPath();
+    for (let i = 0; i < HISTORY_LEN; i++) {
+      const v = s.history[(s.head + i) % HISTORY_LEN];
+      const x = cx + i * stepX, y = cy + ch - v * ch;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.save();
+    ctx.lineTo(cx + cw, cy + ch);
+    ctx.lineTo(cx, cy + ch);
+    ctx.closePath();
+    ctx.fillStyle = fade(s.color, 0.10);
+    ctx.fill();
+    ctx.restore();
+
+    // Glow pass then crisp pass.
+    ctx.beginPath();
+    for (let i = 0; i < HISTORY_LEN; i++) {
+      const v = s.history[(s.head + i) % HISTORY_LEN];
+      const x = cx + i * stepX, y = cy + ch - v * ch;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = fade(s.color, 0.22);
+    ctx.stroke();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = s.color.css;
+    ctx.stroke();
+  }
+}
+
+/** Fake progress bars: some complete, some fail, some loop forever. */
+const BAR_RUNNING = 0, BAR_COMPLETED = 1, BAR_FAILED = 2, BAR_RESTARTING = 3;
+
+class ProgressPanel extends Panel {
+  constructor() {
+    super();
+    this.title = "TASK PIPELINE";
+    this.accent = T.Green;
+    this.bars = [];
+    for (let i = 0; i < 6; i++) this.bars.push(this.newBar());
+  }
+  newBar() {
+    const bar = {
+      label: RD.progressLabel(),
+      progress: rnd() * 0.2,
+      speed: 0.04 + rnd() * 0.25,
+      failAt: 2,
+      endless: rndInt(100) < 15,
+      state: BAR_RUNNING,
+      timer: 0,
+      status: statusWordFor(0)
+    };
+    if (!bar.endless && rndInt(100) < 25) bar.failAt = 0.3 + rnd() * 0.65;  // doomed
+    return bar;
+  }
+  update(dt) {
+    super.update(dt);
+    for (let i = 0; i < this.bars.length; i++) {
+      const bar = this.bars[i];
+      switch (bar.state) {
+        case BAR_RUNNING:
+          bar.progress += bar.speed * dt * (0.6 + rnd() * 0.8);
+          bar.status = statusWordFor(bar.progress);
+          if (bar.progress >= bar.failAt) {
+            bar.state = BAR_FAILED;
+            bar.timer = 1.5 + rnd() * 1.5;
+            bar.status = "FAILED";
+          } else if (bar.progress >= 1) {
+            bar.progress = 1;
+            if (bar.endless) {
+              bar.progress = 0;   // silent loop
+              // Without this, "endless" is an absorbing state: every restart
+              // can become endless and endless bars never leave, so slots
+              // eventually freeze on the same labels forever.
+              if (rndInt(100) < 35) {
+                const next = this.newBar();
+                bar.label = next.label; bar.speed = next.speed;
+                bar.failAt = next.failAt; bar.endless = next.endless;
+              }
+            } else {
+              bar.state = BAR_COMPLETED;
+              bar.timer = 1.2 + rnd() * 2.0;
+              bar.status = "Completed";
+            }
+          }
+          break;
+        case BAR_COMPLETED:
+        case BAR_FAILED:
+          bar.timer -= dt;
+          if (bar.timer <= 0) {
+            bar.state = BAR_RESTARTING;
+            bar.timer = 0.4 + rnd() * 0.8;
+            bar.status = "Restarting...";
+          }
+          break;
+        case BAR_RESTARTING:
+          bar.timer -= dt;
+          if (bar.timer <= 0) {
+            const fresh = this.newBar();
+            bar.label = fresh.label; bar.progress = 0; bar.speed = fresh.speed;
+            bar.failAt = fresh.failAt; bar.endless = fresh.endless;
+            bar.state = BAR_RUNNING;
+            bar.status = statusWordFor(0);
+          }
+          break;
+      }
+    }
+  }
+  drawContent(r) {
+    let rowH = 30;
+    const slots = Math.max(1, (r.h / rowH) | 0);
+    rowH = r.h / slots;
+    const n = Math.min(slots, this.bars.length);
+    for (let i = 0; i < n; i++) {
+      this.drawBar(this.bars[i], { x: r.x, y: r.y + i * rowH, w: r.w, h: rowH - 4 });
+    }
+  }
+  drawBar(bar, r) {
+    const color = bar.state === BAR_FAILED ? T.Red
+                : bar.state === BAR_COMPLETED ? T.Green
+                : bar.state === BAR_RESTARTING ? T.Orange : T.Green;
+
+    ctx.font = fontMono(10.5 * 0.85);
+    ctx.fillStyle = T.Gray.css;
+    textL(bar.label, r.x, r.y, 12);
+    ctx.fillStyle = color.css;
+    const right = bar.state === BAR_RUNNING
+      ? bar.status + " " + Math.round(bar.progress * 100) + "%"
+      : bar.status;
+    textR(right, r.x, r.w, r.y, 12);
+
+    // Block-character bar, movie style: ██████░░░░░
+    //
+    // Drawn as rectangles rather than text: Chrome substitutes a fallback
+    // font for ░ whose glyph is ~25px tall at this size (vs 12px for █),
+    // so the shaded run would bleed over the label above it. The geometry
+    // below is taken from the █ glyph box, so it matches the MAUI build
+    // exactly — and it drops the per-frame string building too.
+    const cw = charW(10.5);
+    const cells = Math.max(8, ((r.w / cw) | 0) - 1);
+    const filled = Math.round(clamp(bar.progress, 0, 1) * cells);
+    const bm = blockMetrics(10.5);
+    const midY = r.y + 12 + (r.h - 12) / 2;
+    const top = midY - bm.asc, hgt = bm.asc + bm.desc;
+    const css = bar.state === BAR_FAILED ? T.DimRed.css : fade(color, 0.9);
+    if (filled > 0) {
+      ctx.fillStyle = css;
+      ctx.fillRect(r.x, top, filled * cw, hgt);
+    }
+    if (cells - filled > 0) {
+      ctx.fillStyle = ditherPattern(css);
+      ctx.fillRect(r.x + filled * cw, top, (cells - filled) * cw, hgt);
+    }
+  }
+}
+function statusWordFor(p) {
+  return p < 0.35 ? "Synchronizing..." : p < 0.70 ? "Verifying..."
+       : p < 0.95 ? "Optimizing..." : "Finalizing...";
+}
+
+/** Parody centrepiece: logo, fake analysis steps, then BREACHED. */
+const PH_INTRO = 0, PH_WORKING = 1, PH_BREACHED = 2, PH_FADEOUT = 3;
+const INTRO_DUR = 1.2, BREACH_DUR = 3.2, FADEOUT_DUR = 0.5;
+
+class CompanyPanel extends Panel {
+  constructor() {
+    super();
+    this.title = "TARGET ACQUISITION";
+    this.accent = T.Red;
+    this.deck = shuffled(COMPANIES);
+    this.index = 0;
+    this.phase = PH_INTRO;
+    this.phaseTime = 0;
+    this.phaseDuration = INTRO_DUR;
+    this.steps = [];
+    this.stepIndex = 0;
+    this.stepProgress = 0;
+    this.stepSpeed = 1;
+    this.prepare();
+  }
+  get current() { return this.deck[this.index]; }
+  prepare() {
+    this.steps = takeShuffled(RD.CompanySteps, 5 + rndInt(4));
+    this.stepIndex = 0;
+    this.stepProgress = 0;
+    this.stepSpeed = 0.6 + rnd() * 1.6;
+  }
+  setPhase(p, d) { this.phase = p; this.phaseTime = 0; this.phaseDuration = d; }
+  update(dt) {
+    super.update(dt);
+    this.phaseTime += dt;
+    switch (this.phase) {
+      case PH_INTRO:
+        if (this.phaseTime >= this.phaseDuration) this.setPhase(PH_WORKING, 0);
+        break;
+      case PH_WORKING:
+        this.stepProgress += this.stepSpeed * dt * (0.7 + rnd() * 0.6);
+        if (this.stepProgress >= 1) {
+          this.stepProgress = 0;
+          this.stepSpeed = 0.6 + rnd() * 1.6;
+          this.stepIndex++;
+          if (this.stepIndex >= this.steps.length) {
+            this.setPhase(PH_BREACHED, BREACH_DUR);
+            // Warm the next logo now so it is decoded by the time its intro
+            // fades in, instead of flashing the monogram for a frame or two.
+            if (this.index + 1 < this.deck.length) Logos.get(this.deck[this.index + 1]);
+          }
+        }
+        break;
+      case PH_BREACHED:
+        if (this.phaseTime >= this.phaseDuration) this.setPhase(PH_FADEOUT, FADEOUT_DUR);
+        break;
+      case PH_FADEOUT:
+        if (this.phaseTime >= this.phaseDuration) {
+          Logos.release(this.current);
+          this.index++;
+          if (this.index >= this.deck.length) { this.deck = shuffled(COMPANIES); this.index = 0; }
+          this.prepare();
+          this.setPhase(PH_INTRO, INTRO_DUR);
+        }
+        break;
+    }
+  }
+  drawContent(r) {
+    const company = this.current;
+    const t = this.phaseTime;
+    const alpha = this.phase === PH_INTRO ? clamp(t / INTRO_DUR, 0, 1)
+                : this.phase === PH_FADEOUT ? 1 - clamp(t / FADEOUT_DUR, 0, 1) : 1;
+    const breached = this.phase === PH_BREACHED || this.phase === PH_FADEOUT;
+
+    const logoSize = Math.min(r.h * 0.42, r.w * 0.35);
+    const logoX = r.x + r.w / 2 - logoSize / 2;
+    const logoY = r.y + 8 + (1 - alpha) * 14;   // slides up during intro
+    const logo = { x: logoX, y: logoY, w: logoSize, h: logoSize };
+    const brand = breached ? grayscale(company.accent) : company.accent;
+
+    const image = Logos.get(company);
+    if (image) {
+      // Fit inside the square, preserving aspect — wordmark logos are far
+      // wider than tall and would otherwise be stretched square.
+      const fit = Math.min(logo.w / image.naturalWidth, logo.h / image.naturalHeight);
+      const iw = image.naturalWidth * fit, ih = image.naturalHeight * fit;
+      ctx.globalAlpha = alpha * (breached ? 0.45 : 1);
+      ctx.drawImage(image, logo.x + logo.w / 2 - iw / 2, logo.y + logo.h / 2 - ih / 2, iw, ih);
+      ctx.globalAlpha = 1;
+    } else {
+      // Procedural monogram.
+      ctx.fillStyle = fade(brand, 0.16 * alpha);
+      roundRect(logo.x, logo.y, logo.w, logo.h, logoSize * 0.18); ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = fade(brand, 0.9 * alpha);
+      roundRect(logo.x, logo.y, logo.w, logo.h, logoSize * 0.18); ctx.stroke();
+      ctx.font = fontMonoBold(logoSize * 0.42);
+      ctx.fillStyle = fade(brand, alpha);
+      textC(company.initials, logo.x, logo.w, logo.y, logo.h);
+    }
+
+    ctx.font = fontMonoBold(Math.min(22, r.w / (company.name.length * 0.75)));
+    ctx.fillStyle = fade(breached ? T.Gray : T.White, alpha);
+    textC(company.name.toUpperCase(), r.x, r.w, logo.y + logo.h + 4, 26);
+
+    const bodyY = logo.y + logo.h + 34;
+    if (this.phase === PH_WORKING || this.phase === PH_INTRO) this.drawSteps(r, bodyY, alpha);
+    else this.drawBreach(r, logo, bodyY, alpha);
+  }
+  drawSteps(r, y, alpha) {
+    const lineH = 17;
+    const bottom = r.y + r.h;
+    ctx.font = fontMono(11);
+    const firstShown = Math.max(0, this.stepIndex - (((bottom - y) / lineH) | 0) + 2);
+    for (let i = firstShown; i < this.stepIndex && y < bottom - lineH; i++, y += lineH) {
+      ctx.fillStyle = fade(T.DimGreen, alpha);
+      textL("✔ " + this.steps[i], r.x + 10, y, lineH);
+    }
+    if (this.phase !== PH_WORKING || this.stepIndex >= this.steps.length) return;
+
+    ctx.fillStyle = fade(T.Cyan, alpha);
+    textL("▸ " + this.steps[this.stepIndex], r.x + 10, y, lineH);
+    y += lineH;
+
+    if (y < bottom - 12) {
+      const barW = r.w - 40, bx = r.x + 20, by = y + 3;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = fade(T.Cyan, 0.5 * alpha);
+      ctx.strokeRect(bx + 0.5, by + 0.5, barW - 1, 7 - 1);
+      ctx.fillStyle = fade(T.Cyan, 0.85 * alpha);
+      ctx.fillRect(bx + 1, by + 1, (barW - 2) * this.stepProgress, 5);
+      ctx.font = fontMono(9);
+      ctx.fillStyle = fade(T.Cyan, 0.8 * alpha);
+      textR(Math.round(this.stepProgress * 100) + "%", r.x, r.w - 20, y + 12, 12);
+    }
+  }
+  drawBreach(r, logo, y, alpha) {
+    // Big red X across the logo.
+    const inset = logo.w * 0.1;
+    const x1 = logo.x + inset, y1 = logo.y + inset;
+    const x2 = logo.x + logo.w - inset, y2 = logo.y + logo.h - inset;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.moveTo(x2, y1); ctx.lineTo(x1, y2);
+    ctx.lineWidth = 7; ctx.strokeStyle = fade(T.Red, 0.35 * alpha); ctx.stroke();
+    ctx.lineWidth = 4; ctx.strokeStyle = fade(T.Red, alpha); ctx.stroke();
+
+    const blink = 0.72 + 0.28 * Math.sin(this.phaseTime * 9);
+    const bottom = r.y + r.h;
+    const bh = Math.max(30, Math.min(44, bottom - y - 6));
+    if (bh < 22) return;
+    const bx = r.x + 14, bw = r.w - 28;
+
+    ctx.fillStyle = fade(T.Red, 0.12 * alpha);
+    roundRect(bx, y, bw, bh, 4); ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = fade(T.Red, blink * alpha);
+    roundRect(bx, y, bw, bh, 4); ctx.stroke();
+
+    ctx.font = fontMonoBold(Math.min(19, bw / 14));
+    ctx.fillStyle = fade(T.Red, blink * alpha);
+    textC("BREACHED SUCCESSFULLY", bx, bw, y, bh);
+  }
+}
+function grayscale(c) {
+  const l = Math.round(0.299 * c.r + 0.587 * c.g + 0.114 * c.b);
+  const hex = "#" + ((1 << 24) + (l << 16) + (l << 8) + l).toString(16).slice(1);
+  return mkColor(hex);
+}
+
+/** Endless "live coding" theatre. Lines are random, but a grammar keeps
+ *  them from forming shapes that read as obviously wrong:
+ *    1. a return is always the last line of its block
+ *    2. a let is never the last line of a block
+ *    3. a block never closes empty (comments/blanks are not content)
+ *    4. no two blank lines in a row at top level
+ *    5. an attribute is followed by the item kind it can decorate
+ *    6. struct/enum bodies hold only members, and names never repeat
+ *    7. .await only inside an async fn
+ *    8. a bare statement is always a call (no no-effect arithmetic)
+ *  Costs a few small fields and a couple of branches per line: no
+ *  lookahead, no block stack, no allocation. */
+const CP = {
+  Verbs: ["sync","resolve","rebuild","flush","merge","decode","dispatch","allocate","bind","hash","route","spawn","trace","quantize","fold","emit","seal","probe","drain","warm","attach","collect","anneal","splice","reconcile","promote","fence","replay","compact","evict","settle","interleave","rekey","attest"],
+  Nouns: ["buffer","shard","frame","node","cache","stream","packet","index","lattice","vector","manifest","quorum","channel","registry","entropy","socket","matrix","token","ledger","pool","epoch","lease","cursor","ballot","journal","segment","witness","horizon","fanout","backlog","spill","anchor"],
+  Types: ["u32","u64","i64","f32","bool","Frame","Node","Stream","Buffer","Hash256","Registry","Vec<Node>","Result","Slice","u16","usize","Epoch","Lease","Cursor","Option<Frame>","Arc<Node>","Ballot"],
+  TypeNames: ["ShardFrame","QuorumLease","EntropyPool","RelayCursor","LatticeEpoch","SealBallot","MeshWitness","FanoutPlan","SpillLedger","ProbeAnchor","TokenHorizon","JournalGate"],
+  VariantNames: ["Idle","Pending","Sealed","Draining","Warming","Stale","Attached","Fenced","Promoted","Evicted","Settled","Replaying"],
+  ConstNames: ["MAX_FRAME","SHARD_FANOUT","LEASE_TTL","EPOCH_STRIDE","SPILL_LIMIT","QUORUM_MIN","PROBE_BUDGET","SEAL_ROUNDS"],
+  MacroNames: ["trace","debug","info","warn"],
+  FnAttributes: ["inline","async_trait","cold","traced","must_use","instrument"],
+  TypeAttributes: ["derive(Clone, Debug)","derive(Sync)","repr(C)","derive(Default)"],
+  Predicates: ["is_ready","is_sealed","has_quorum","is_stale","is_fenced","needs_replay","is_draining","has_backlog"],
+  Indents: ["", "    ", "        ", "            ", "                "]
+};
+const P_NONE = 0, P_BLANK = 1, P_COMMENT = 2, P_ATTRFN = 3, P_ATTRTYPE = 4, P_OPEN = 5, P_LET = 6, P_RETURN = 7, P_OTHER = 8;
+const C_FN = 0, C_STRUCT = 1, C_ENUM = 2;
+
+class CodePanel extends Panel {
+  constructor() {
+    super();
+    this.title = "SOURCE SYNTH // LIVE";
+    this.accent = T.Green;
+    this.kw = T.Cyan; this.ty = T.Green; this.id = T.White;
+    this.st = T.Orange; this.nu = T.Blue; this.cm = T.Gray; this.pu = T.DimGreen;
+
+    this.indent = 0; this.bodyLines = 0; this.prev = P_NONE;
+    this.container = C_FN; this.memberBase = 0; this.asyncFn = false; this.sinceOpen = 0;
+
+    this.done = [];
+    this.typed = 0; this.typeAcc = 0;
+    this.cps = 30 + rnd() * 25;
+    this.cpsRetarget = 0; this.pauseLeft = 0;
+    this.current = this.generateLine();
+    for (let i = 0; i < 55; i++) { this.done.push(this.current); this.current = this.generateLine(); }
+  }
+  update(dt) {
+    super.update(dt);
+    if (this.pauseLeft > 0) { this.pauseLeft -= dt; return; }
+    this.cpsRetarget -= dt;
+    if (this.cpsRetarget <= 0) { this.cps = 22 + rnd() * 48; this.cpsRetarget = 2 + rnd() * 5; }
+    this.typeAcc += this.cps * dt;
+    const step = this.typeAcc | 0;
+    if (step > 0) { this.typeAcc -= step; this.typed += step; }
+    while (this.typed >= this.current.total) {
+      this.typed -= this.current.total;
+      this.finishLine();
+      if (this.pauseLeft > 0) { this.typed = 0; break; }
+    }
+  }
+  finishLine() {
+    this.done.push(this.current);
+    if (this.done.length > 70) this.done.splice(0, this.done.length - 70);
+    this.current = this.generateLine();
+    const roll = rndInt(100);
+    this.pauseLeft = roll < 6 ? 1.0 + rnd() * 1.8        // stares at the screen
+                   : roll < 40 ? 0.08 + rnd() * 0.30     // normal line break
+                   : 0;                                  // in the zone
+  }
+  drawContent(r) {
+    ctx.font = fontMono(12.5);
+    const lh = lineHeight(12.5), cw = charW(12.5);
+    let y = r.y + r.h - lh;
+    const cursorX = this.drawLine(this.current, r, y, cw, lh, this.typed);
+    if (this.pauseLeft <= 0 || (Date.now() % 1000) < 500) {
+      ctx.fillStyle = fade(T.Green, 0.85);
+      ctx.fillRect(cursorX + 1, y + lh * 0.15, cw * 0.8, lh * 0.75);
+    }
+    for (let i = this.done.length - 1; i >= 0; i--) {
+      y -= lh;
+      if (y < r.y - lh) break;
+      this.drawLine(this.done[i], r, y, cw, lh, 1e9);
+    }
+  }
+  drawLine(line, r, y, cw, lh, maxChars) {
+    let x = r.x, remaining = maxChars;
+    const s = line.s, c = line.c;
+    for (let i = 0; i < s.length; i++) {
+      if (remaining <= 0 || x > r.x + r.w) break;
+      const text = s[i].length <= remaining ? s[i] : s[i].slice(0, remaining);
+      ctx.fillStyle = c[i].css;
+      textL(text, x, y, lh);
+      x += text.length * cw;
+      remaining -= text.length;
+    }
+    return x;
+  }
+
+  // ---- generator ---------------------------------------------------
+  add(l, text, color) { l.s.push(text); l.c.push(color); l.total += text.length; }
+  ident() { return pick(CP.Verbs) + "_" + pick(CP.Nouns); }
+  addIndent(l, depth) {
+    if (depth > 0) this.add(l, depth < CP.Indents.length ? CP.Indents[depth] : CP.Indents[CP.Indents.length - 1], this.pu);
+  }
+  addComment(l) { this.add(l, "// " + pick(CP.Verbs) + " " + pick(CP.Nouns) + " before " + pick(CP.Verbs) + " pass", this.cm); }
+
+  generateLine() {
+    const l = { s: [], c: [], total: 0 };
+    this.addIndent(l, this.indent);
+    if (this.indent === 0) this.genTopLevel(l);
+    else if (this.container !== C_FN) this.genMember(l);
+    else this.genStatement(l);
+    if (l.total === 0) this.add(l, " ", this.pu);   // typing math divides by total
+    return l;
+  }
+
+  genTopLevel(l) {
+    let roll = rndInt(100);
+    // An attribute attaches to the item below it, so it is always followed
+    // by an item — never a blank, comment, second attribute or const.
+    const afterAttr = this.prev === P_ATTRFN || this.prev === P_ATTRTYPE;
+    if (!afterAttr) {
+      if (roll < 14 && this.prev !== P_BLANK) { this.add(l, " ", this.pu); this.prev = P_BLANK; return; }
+      if (roll < 30) { this.addComment(l); this.prev = P_COMMENT; return; }
+      if (roll < 40) {
+        const forType = rndInt(3) === 0;
+        this.add(l, "#[" + pick(forType ? CP.TypeAttributes : CP.FnAttributes) + "]", this.pu);
+        this.prev = forType ? P_ATTRTYPE : P_ATTRFN;
+        return;
+      }
+      if (roll < 48) {
+        this.add(l, "const ", this.kw);
+        this.add(l, pick(CP.ConstNames), this.id);
+        this.add(l, ": ", this.pu);
+        this.add(l, rndInt(2) === 0 ? "u32" : "usize", this.ty);
+        this.add(l, " = ", this.pu);
+        this.add(l, String(1 << rndInt(4, 15)), this.nu);
+        this.add(l, ";", this.pu);
+        this.prev = P_OTHER;
+        return;
+      }
+    }
+    // A type attribute forces a type; a fn attribute forces a fn.
+    if (this.prev === P_ATTRTYPE || (this.prev !== P_ATTRFN && roll < 62)) {
+      const isEnum = rndInt(3) === 0;
+      if (rndInt(2) === 0) this.add(l, "pub ", this.kw);
+      this.add(l, isEnum ? "enum " : "struct ", this.kw);
+      this.add(l, pick(CP.TypeNames), this.ty);
+      this.add(l, " {", this.pu);
+      this.container = isEnum ? C_ENUM : C_STRUCT;
+      this.indent = 1; this.bodyLines = 0; this.sinceOpen = 0;
+      this.memberBase = rndInt(1024);
+      this.prev = P_OPEN;
+      return;
+    }
+    this.asyncFn = rndInt(3) === 0;
+    this.add(l, this.asyncFn ? "pub async fn " : rndInt(2) === 0 ? "pub fn " : "fn ", this.kw);
+    this.add(l, this.ident(), this.id);
+    this.add(l, "(", this.pu);
+    const args = rndInt(3);
+    for (let i = 0; i < args; i++) {
+      if (i > 0) this.add(l, ", ", this.pu);
+      this.add(l, pick(CP.Nouns), this.id);
+      this.add(l, ": ", this.pu);
+      this.add(l, pick(CP.Types), this.ty);
+    }
+    this.add(l, ") -> ", this.pu);
+    this.add(l, pick(CP.Types), this.ty);
+    this.add(l, " {", this.pu);
+    this.container = C_FN;
+    this.indent = 1; this.bodyLines = 0; this.sinceOpen = 0;
+    this.prev = P_OPEN;
+  }
+
+  /** Struct fields / enum variants: no nesting, no lets, no returns. */
+  genMember(l) {
+    this.bodyLines++;
+    const roll = rndInt(100);
+    if ((roll < 22 || this.bodyLines > 6) && this.sinceOpen > 0) {
+      this.indent = 0;
+      l.s.length = 0; l.c.length = 0; l.total = 0;
+      this.add(l, "}", this.pu);
+      this.container = C_FN; this.bodyLines = 0; this.prev = P_NONE;
+      return;
+    }
+    if (roll >= 22 && roll < 32) { this.addComment(l); this.prev = P_COMMENT; return; }
+    // Striding by a step coprime with the pool length makes every member
+    // name in this block unique without tracking a set.
+    if (this.container === C_ENUM) {
+      this.add(l, CP.VariantNames[(this.memberBase + this.sinceOpen * 5) % CP.VariantNames.length], this.ty);
+      if (rndInt(3) === 0) {
+        this.add(l, "(", this.pu);
+        this.add(l, pick(CP.Types), this.ty);
+        this.add(l, ")", this.pu);
+      }
+      this.add(l, ",", this.pu);
+    } else {
+      if (rndInt(3) === 0) this.add(l, "pub ", this.kw);
+      this.add(l, CP.Nouns[(this.memberBase + this.sinceOpen * 5) % CP.Nouns.length], this.id);
+      this.add(l, ": ", this.pu);
+      this.add(l, pick(CP.Types), this.ty);
+      this.add(l, ",", this.pu);
+    }
+    this.sinceOpen++;
+    this.prev = P_OTHER;
+  }
+
+  genStatement(l) {
+    this.bodyLines++;
+    let roll = rndInt(100);
+    let close = roll < 14 || this.bodyLines > 9;
+
+    // A return ends its block: anything after it would be unreachable.
+    if (this.prev === P_RETURN) close = true;
+    // Never close a block with no real statements in it.
+    if (this.sinceOpen === 0) close = false;
+    // A let must not be the block's last line — it would bind a value that
+    // is never used. Emit one more real statement first.
+    let forceStatement = false;
+    if (close && this.prev === P_LET) { close = false; forceStatement = true; }
+    // Keep forward progress when the body is over budget but not closable.
+    if (!close && this.bodyLines > 9 && this.sinceOpen === 0) forceStatement = true;
+    // A forced line must be able to end a block, so re-roll into the
+    // return/macro/call range — otherwise the low roll always picks return.
+    if (forceStatement) roll = 58 + rndInt(42);
+
+    if (close) {
+      this.indent--;
+      l.s.length = 0; l.c.length = 0; l.total = 0;
+      this.addIndent(l, this.indent);
+      this.add(l, "}", this.pu);
+      // The enclosing block now provably contains this nested block.
+      this.sinceOpen = 1;
+      this.prev = P_OTHER;
+      if (this.indent === 0) { this.bodyLines = 0; this.prev = P_NONE; }
+      return;
+    }
+    if (roll < 24) { this.addComment(l); this.prev = P_COMMENT; return; }
+
+    if (roll < 40 && this.indent < 3) {                       // nested block
+      const kind = rndInt(3);
+      if (kind === 0) {
+        this.add(l, "if ", this.kw);
+        this.add(l, rndInt(2) === 0 ? "!" : "", this.pu);
+        this.add(l, pick(CP.Nouns) + "." + pick(CP.Predicates) + "()", this.id);
+        this.add(l, " {", this.pu);
+      } else if (kind === 1) {
+        this.add(l, "for ", this.kw);
+        this.add(l, pick(CP.Nouns), this.id);
+        this.add(l, " in ", this.kw);
+        this.add(l, pick(CP.Nouns) + ".chunks(", this.id);
+        this.add(l, String(1 << rndInt(4, 9)), this.nu);
+        this.add(l, ") {", this.pu);
+      } else {
+        this.add(l, "while ", this.kw);
+        this.add(l, pick(CP.Nouns) + ".pending()", this.id);
+        this.add(l, " > ", this.pu);
+        this.add(l, String(rndInt(0, 8)), this.nu);
+        this.add(l, " {", this.pu);
+      }
+      this.indent++; this.sinceOpen = 0; this.prev = P_OPEN;
+      return;
+    }
+
+    if (roll < 58) {                                          // let binding
+      this.add(l, "let ", this.kw);
+      if (rndInt(3) === 0) this.add(l, "mut ", this.kw);
+      this.add(l, pick(CP.Nouns), this.id);
+      this.add(l, " = ", this.pu);
+      this.addExpression(l, false);
+      this.add(l, ";", this.pu);
+      this.sinceOpen++; this.prev = P_LET;
+      return;
+    }
+
+    if (roll < 68 && this.indent >= 1) {                      // return
+      this.add(l, "return ", this.kw);
+      this.add(l, "Ok(", this.ty);
+      this.add(l, pick(CP.Nouns), this.id);
+      this.add(l, ");", this.pu);
+      this.sinceOpen++; this.prev = P_RETURN;
+      return;
+    }
+
+    if (roll < 76) {                                          // log macro
+      this.add(l, pick(CP.MacroNames) + "!(", this.ty);
+      this.add(l, '"' + pick(CP.Verbs) + " " + pick(CP.Nouns) + ': {}"', this.st);
+      this.add(l, ", " + pick(CP.Nouns) + ".len());", this.pu);
+      this.sinceOpen++; this.prev = P_OTHER;
+      return;
+    }
+
+    this.addExpression(l, true);                              // plain call
+    if (this.asyncFn && rndInt(4) === 0) this.add(l, ".await", this.kw);
+    this.add(l, rndInt(4) === 0 ? "?;" : ";", this.pu);
+    this.sinceOpen++; this.prev = P_OTHER;
+  }
+
+  /** statement=true restricts to call forms: bare arithmetic or a bare cast
+   *  has no effect and reads as wrong as a standalone statement. */
+  addExpression(l, statement) {
+    const kind = statement ? [0, 1, 3][rndInt(3)] : rndInt(7);
+    if (kind === 0) {
+      this.add(l, pick(CP.Nouns) + "." + this.ident() + "(", this.id);
+      this.add(l, rndInt(2) === 0 ? pick(CP.Nouns) : "", this.id);
+      this.add(l, ")", this.id);
+    } else if (kind === 1) {
+      this.add(l, this.ident() + "(", this.id);
+      this.add(l, "0x" + RD.hex(4), this.nu);
+      this.add(l, ")", this.id);
+    } else if (kind === 2) {
+      this.add(l, pick(CP.Nouns) + ".len()", this.id);
+      this.add(l, " * ", this.pu);
+      this.add(l, String(1 << rndInt(1, 6)), this.nu);
+    } else if (kind === 3) {
+      this.add(l, pick(CP.Nouns) + ".bind(", this.id);
+      this.add(l, '"' + pick(CP.Verbs) + "-" + pad0(rndInt(1, 99), 2) + '"', this.st);
+      this.add(l, ")", this.id);
+    } else if (kind === 4) {
+      const n = pick(CP.Nouns);
+      this.add(l, pick(CP.Nouns) + ".iter().filter(", this.id);
+      this.add(l, "|" + n + "| ", this.pu);
+      this.add(l, n + "." + pick(CP.Predicates) + "()", this.id);
+      this.add(l, ").count()", this.id);
+    } else if (kind === 5) {
+      this.add(l, "(" + pick(CP.Nouns) + ".len()", this.id);
+      this.add(l, " as ", this.kw);
+      this.add(l, rndInt(2) === 0 ? "u64" : "usize", this.ty);
+      this.add(l, ")", this.pu);
+    } else {
+      this.add(l, pick(CP.ConstNames), this.id);
+      this.add(l, rndInt(2) === 0 ? " >> " : " - ", this.pu);
+      this.add(l, String(1 << rndInt(0, 5)), this.nu);
+    }
+  }
+}
+
+/** Fake interactive Linux terminal: types a command, plays its timed
+ *  output script (including carriage-return style progress lines), waits
+ *  0.5–1 s, moves on. Pure theatre — nothing is ever executed. */
+const SH_TYPING = 0, SH_RUNNING = 1, SH_PAUSE = 2;
+
+class ShellPanel extends Panel {
+  constructor() {
+    super();
+    const host = "synapse-" + pad0(rndInt(1, 20), 2);
+    this.title = "TTY // root@" + host;
+    this.accent = T.Cyan;
+    this.prompt = "root@" + host + ":~# ";
+    this.lines = [];
+    this.deck = shuffled(buildShellDeck());
+    this.deckIndex = 0;
+    this.state = SH_PAUSE;
+    this.typing = "";
+    this.typedChars = 0;
+    this.typeAcc = 0;
+    this.typePause = 0;
+    this.cps = 16;
+    this.events = null;
+    this.eventDelay = 0;
+    this.pauseLeft = 0.6;
+
+    // Pre-play two commands instantly so the terminal opens with scrollback.
+    for (let i = 0; i < 2; i++) {
+      const cmd = this.deck[this.deckIndex];
+      this.push(this.prompt + cmd.build(), 0, this.prompt.length);
+      const evs = cmd.run();
+      for (let j = 0; j < evs.length; j++) this.apply(evs[j]);
+      this.deckIndex++;
+    }
+  }
+  push(text, color, promptLen) {
+    this.lines.push({ t: text, c: color, p: promptLen });
+    if (this.lines.length > 90) this.lines.splice(0, this.lines.length - 90);
+  }
+  apply(e) {
+    // Replace only makes sense on an output line, never the prompt line.
+    if (e.r && this.lines.length > 0 && this.lines[this.lines.length - 1].p === 0) {
+      const last = this.lines[this.lines.length - 1];
+      last.t = e.t; last.c = e.c; last.p = 0;
+    } else {
+      this.push(e.t, e.c, 0);
+    }
+  }
+  update(dt) {
+    super.update(dt);
+    if (this.state === SH_TYPING) this.updateTyping(dt);
+    else if (this.state === SH_RUNNING) this.updateRunning(dt);
+    else this.updatePause(dt);
+  }
+  updateTyping(dt) {
+    if (this.typePause > 0) { this.typePause -= dt; return; }
+    this.typeAcc += this.cps * dt;
+    const step = this.typeAcc | 0;
+    if (step > 0) {
+      this.typeAcc -= step;
+      this.typedChars = Math.min(this.typing.length, this.typedChars + step);
+      // Occasional human hesitation mid-command.
+      if (this.typedChars < this.typing.length && rndInt(100) < 4)
+        this.typePause = 0.15 + rnd() * 0.45;
+    }
+    if (this.typedChars >= this.typing.length) {
+      this.push(this.prompt + this.typing, 0, this.prompt.length);
+      this.events = this.deck[this.deckIndex].run();
+      this.eventIndex = 0;
+      if (this.events.length > 0) {
+        this.eventDelay = this.events[0].d;
+        this.state = SH_RUNNING;
+      } else {
+        this.finishCommand();
+      }
+    }
+  }
+  updateRunning(dt) {
+    this.eventDelay -= dt;
+    // Consume every event whose time has come (handles fast bursts).
+    while (this.eventDelay <= 0 && this.events) {
+      this.apply(this.events[this.eventIndex]);
+      this.eventIndex++;
+      if (this.eventIndex >= this.events.length) { this.finishCommand(); return; }
+      this.eventDelay += this.events[this.eventIndex].d;
+    }
+  }
+  finishCommand() {
+    this.events = null;
+    this.state = SH_PAUSE;
+    this.pauseLeft = 0.5 + rnd() * 0.5;
+  }
+  updatePause(dt) {
+    this.pauseLeft -= dt;
+    if (this.pauseLeft > 0) return;
+    this.deckIndex++;
+    if (this.deckIndex >= this.deck.length) { this.deck = shuffled(this.deck); this.deckIndex = 0; }
+    this.typing = this.deck[this.deckIndex].build();
+    this.typedChars = 0;
+    this.typeAcc = 0;
+    this.cps = 14 + rnd() * 16;
+    this.state = SH_TYPING;
+  }
+  drawContent(r) {
+    ctx.font = fontMono(11);
+    const lh = lineHeight(11), cw = charW(11);
+    const maxChars = Math.max(8, (r.w / cw) | 0);
+    const bottom = r.y + r.h;
+
+    // Bottom row: the active prompt/typing line (or a cursor while running).
+    let y = bottom - lh;
+    if (this.state === SH_TYPING || this.state === SH_PAUSE) {
+      const typed = this.state === SH_TYPING ? this.typing.slice(0, this.typedChars) : "";
+      ctx.fillStyle = T.Green.css;
+      textL(this.prompt, r.x, y, lh);
+      let x = r.x + this.prompt.length * cw;
+      if (typed.length > 0) {
+        ctx.fillStyle = T.White.css;
+        textL(typed, x, y, lh);
+        x += typed.length * cw;
+      }
+      drawShellCursor(x, y, cw, lh);
+    } else {
+      drawShellCursor(r.x, y, cw, lh);
+    }
+
+    for (let i = this.lines.length - 1; i >= 0; i--) {
+      y -= lh;
+      if (y < r.y - lh) break;
+      const line = this.lines[i];
+      const text = line.t.length > maxChars ? line.t.slice(0, maxChars) : line.t;
+      if (line.p > 0 && line.p <= text.length) {
+        ctx.fillStyle = T.Green.css;
+        textL(text.slice(0, line.p), r.x, y, lh);
+        ctx.fillStyle = T.White.css;
+        textL(text.slice(line.p), r.x + line.p * cw, y, lh);
+      } else {
+        ctx.fillStyle = shellColor(line.c);
+        textL(text, r.x, y, lh);
+      }
+    }
+  }
+}
+function drawShellCursor(x, y, cw, lh) {
+  if ((Date.now() % 1000) >= 500) return;
+  ctx.fillStyle = fade(T.Green, 0.85);
+  ctx.fillRect(x + 1, y + lh * 0.15, cw * 0.8, lh * 0.72);
+}
+// ShellColor → Theme
+const SC_DEFAULT = 0, SC_DIM = 1, SC_WHITE = 2, SC_GREEN = 3, SC_RED = 4, SC_ORANGE = 5, SC_CYAN = 6;
+const SHELL_COLORS = [
+  fade(T.White, 0.72), T.Gray.css, T.White.css, T.Green.css, T.Red.css, T.Orange.css, T.Cyan.css
+];
+function shellColor(c) { return SHELL_COLORS[c] || SHELL_COLORS[0]; }
+
+/* ---------------------------------------------------------------------
+   Fake shell commands
+   ------------------------------------------------------------------ */
+
+/* Shared pools of fictional hosts, packages and paths. Every hostname
+   lives under an invented internal domain — nothing resolvable or real. */
+const SD = {
+  HostPrefixes: ["relay","node","vault","mirror","edge","quorum","shard","ingest"],
+  Domains: ["mesh.internal","synapse.grid","lattice.local"],
+  Packages: ["htop","jq","ripgrep","tmux","libssl-dev","zlib1g-dev","build-essential","python3-venv","nginx-core","sqlite3","libquorum-dev","synapse-tools","lattice-utils","meshctl","entropyd","shardfs-utils","relay-cli","hexforge"],
+  Repos: ["core/lattice","mesh/relayd","infra/quorum-seal","tools/hexforge","core/entropy-pool","mesh/shardfs","infra/ingest-gate","tools/framebuf"],
+  Paths: ["/opt/synapse","/var/lib/mesh","/srv/lattice","/etc/relayd","/opt/quorum/state","/var/cache/shardfs"],
+  Units: ["relayd","meshd","quorumd","latticed","shardfs","entropyd"],
+  SourceFiles: ["quorum.c","lattice.c","entropy.c","relay.c","shard.c","mesh.c","codec.c","framebuf.c","seal.c","journal.c","handshake.c","manifest.c","ledger.c","probe.c"],
+  Symbols: ["quorum_seal","entropy_fold","shard_bind","relay_dispatch","lattice_merge","frame_emit","ledger_sync","probe_attach"]
+};
+SD.hostName = function () { return pick(SD.HostPrefixes) + "-" + pad0(rndInt(1, 99), 2); };
+SD.host = function () { return SD.hostName() + "." + pick(SD.Domains); };
+SD.ip = function () { return "10." + rndInt(0, 64) + "." + rndInt(0, 256) + "." + rndInt(1, 255); };
+SD.pkg = function () { return pick(SD.Packages); };
+SD.repo = function () { return pick(SD.Repos); };
+SD.path = function () { return pick(SD.Paths); };
+SD.unit = function () { return pick(SD.Units); };
+SD.symbol = function () { return pick(SD.Symbols); };
+SD.fileDate = function () {
+  const d = new Date(Date.now() - rndInt(0, 40) * 86400000 - rndInt(0, 1440) * 60000);
+  return MONTHS[d.getMonth()] + " " + pad0(d.getDate(), 2) + " " + pad0(d.getHours(), 2) + ":" + pad0(d.getMinutes(), 2);
+};
+
+// Output-script helpers. L appends a line after a delay; R replaces the
+// previous line (carriage-return style progress updates).
+function L(o, d, t, c) { o.push({ d: d, t: t, c: c || 0, r: false }); }
+function R(o, d, t, c) { o.push({ d: d, t: t, c: c || 0, r: true }); }
+/** ASCII progress bar in the docker/wget style: [====>   ]. */
+function bar(frac, width) {
+  frac = clamp(frac, 0, 1);
+  const fill = Math.round(frac * width);
+  if (fill >= width) return "[" + rep("=", width) + "]";
+  if (fill <= 0) return "[" + rep(" ", width) + "]";
+  return "[" + rep("=", fill - 1) + ">" + rep(" ", width - fill) + "]";
+}
+function n1i(v) {                                   // "N1", invariant
+  const p = v.toFixed(1).split(".");
+  return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + p[1];
+}
+
+/** ping — replies trickle in ~1 s apart, with occasional silent loss. */
+class PingCommand {
+  build() {
+    this.host = SD.host(); this.ip = SD.ip(); this.count = 3 + rndInt(3);
+    return "ping -c " + this.count + " " + this.host;
+  }
+  run() {
+    const o = [];
+    L(o, 0.15, "PING " + this.host + " (" + this.ip + ") 56(84) bytes of data.");
+    const ttl = 58 + rndInt(7), baseMs = 3 + rnd() * 35;
+    let received = 0, min = Infinity, max = 0, sum = 0;
+    let pending = 0.2 + rnd() * 0.3;
+    for (let seq = 1; seq <= this.count; seq++) {
+      if (rndInt(100) < 6) { pending += 1.0; continue; }   // lost: just silence
+      const ms = Math.max(0.4, baseMs + (rnd() - 0.5) * 4);
+      received++;
+      if (ms < min) min = ms;
+      if (ms > max) max = ms;
+      sum += ms;
+      L(o, pending, "64 bytes from " + this.ip + ": icmp_seq=" + seq + " ttl=" + ttl + " time=" + ms.toFixed(1) + " ms");
+      pending = 0.85 + rnd() * 0.3;
+    }
+    const loss = Math.round(100 * (this.count - received) / this.count);
+    const avg = received > 0 ? sum / received : 0;
+    L(o, 0.25, "");
+    L(o, 0.02, "--- " + this.host + " ping statistics ---");
+    L(o, 0.02, this.count + " packets transmitted, " + received + " received, " + loss +
+      "% packet loss, time " + ((this.count - 1) * 1000 + rndInt(20, 90)) + "ms", loss > 0 ? SC_ORANGE : SC_DEFAULT);
+    if (received > 0)
+      L(o, 0.02, "rtt min/avg/max/mdev = " + min.toFixed(3) + "/" + avg.toFixed(3) + "/" +
+        max.toFixed(3) + "/" + ((max - min) / 3).toFixed(3) + " ms");
+    return o;
+  }
+}
+
+/** wget — one self-updating progress line. */
+class WgetCommand {
+  build() {
+    this.file = SD.repo().split("/")[1] + "-" + rndInt(1, 4) + "." + rndInt(0, 9) + "." + rndInt(0, 20) + ".tar.gz";
+    this.sizeMb = 4 + rnd() * 220;
+    return "wget -q --show-progress https://" + SD.host() + "/dist/" + this.file;
+  }
+  line(frac, speed, eta) {
+    return padR(this.file, 28) + " " + padL((frac * 100) | 0, 3) + "%" + bar(frac, 20) + " " +
+      padL((this.sizeMb * frac).toFixed(2), 6) + "M  " + speed.toFixed(1) + "MB/s  eta " + Math.max(0, eta).toFixed(0) + "s";
+  }
+  run() {
+    const o = [];
+    const speed = 2.5 + rnd() * 9, totalSec = this.sizeMb / speed;
+    const steps = clamp((totalSec / 0.25) | 0, 6, 28);
+    L(o, 0.3 + rnd() * 0.5, this.line(0, speed, totalSec));
+    for (let i = 1; i <= steps; i++) {
+      const frac = i / steps;
+      R(o, totalSec / steps * (0.7 + rnd() * 0.6), this.line(frac, speed * (0.85 + rnd() * 0.3), totalSec * (1 - frac)));
+    }
+    R(o, 0.1, padR(this.file, 28) + " 100%[" + rep("=", 20) + "] " + this.sizeMb.toFixed(2) +
+      "M  " + speed.toFixed(1) + "MB/s    in " + totalSec.toFixed(1) + "s", SC_GREEN);
+    return o;
+  }
+}
+
+/** docker pull — sequential layer downloads with updating bars. */
+class DockerPullCommand {
+  build() {
+    this.image = SD.repo(); this.tag = rndInt(1, 4) + "." + rndInt(0, 12);
+    return "docker pull registry.mesh.internal/" + this.image + ":" + this.tag;
+  }
+  run() {
+    const o = [];
+    L(o, 0.4 + rnd() * 0.5, this.tag + ": Pulling from " + this.image);
+    const layers = 3 + rndInt(3);
+    for (let n = 0; n < layers; n++) {
+      const id = RD.hex(12).toLowerCase(), sizeMb = 1 + rnd() * 120;
+      L(o, 0.15, id + ": Pulling fs layer", SC_DIM);
+      const steps = clamp((sizeMb / 12) | 0, 3, 10);
+      for (let i = 1; i <= steps; i++) {
+        const frac = i / steps;
+        R(o, 0.12 + rnd() * 0.2, id + ": Downloading " + bar(frac, 16) + "  " +
+          (sizeMb * frac).toFixed(1) + "MB/" + sizeMb.toFixed(1) + "MB", SC_DIM);
+      }
+      R(o, 0.2 + rnd() * 0.3, id + ": Extracting " + bar(1, 16), SC_DIM);
+      R(o, 0.15, id + ": Pull complete");
+    }
+    L(o, 0.2, "Digest: sha256:" + RD.hex(64).toLowerCase(), SC_DIM);
+    L(o, 0.05, "Status: Downloaded newer image for registry.mesh.internal/" + this.image + ":" + this.tag, SC_GREEN);
+    return o;
+  }
+}
+
+/** apt-get install — list reading, fetch, unpack, setup. */
+class AptInstallCommand {
+  build() {
+    this.pkg = SD.pkg();
+    this.version = rndInt(1, 6) + "." + rndInt(0, 16) + "." + rndInt(0, 9) + "-" + rndInt(1, 4);
+    return "sudo apt-get install -y " + this.pkg;
+  }
+  run() {
+    const o = [], kb = 90 + rndInt(4000);
+    L(o, 0.25, "Reading package lists...");
+    R(o, 0.5 + rnd() * 0.8, "Reading package lists... Done");
+    L(o, 0.1, "Building dependency tree...");
+    R(o, 0.3 + rnd() * 0.4, "Building dependency tree... Done");
+    L(o, 0.15, "The following NEW packages will be installed:");
+    L(o, 0.02, "  " + this.pkg);
+    L(o, 0.1, "0 upgraded, 1 newly installed, 0 to remove and " + rndInt(3, 40) + " not upgraded.");
+    L(o, 0.02, "Need to get " + n0(kb) + " kB of archives.");
+    L(o, 0.02, "After this operation, " + n0(Math.trunc(kb * 3.2)) + " kB of additional disk space will be used.");
+    L(o, 0.3 + rnd() * 0.6, "Get:1 http://deb.mesh.internal/stable main amd64 " + this.pkg + " amd64 " + this.version + " [" + n0(kb) + " kB]");
+    L(o, 0.4 + rnd() * 0.8, "Fetched " + n0i(kb) + " kB in " + (1 + rnd() * 3).toFixed(0) + "s (" + n0i(kb / (1.2 + rnd() * 2)) + " kB/s)");
+    L(o, 0.3, "Selecting previously unselected package " + this.pkg + ".");
+    L(o, 0.2, "(Reading database ... " + (60000 + rndInt(60000)) + " files and directories currently installed.)");
+    L(o, 0.25, "Preparing to unpack .../" + this.pkg + "_" + this.version + "_amd64.deb ...");
+    L(o, 0.3 + rnd() * 0.5, "Unpacking " + this.pkg + " (" + this.version + ") ...");
+    L(o, 0.4 + rnd() * 0.8, "Setting up " + this.pkg + " (" + this.version + ") ...");
+    if (rndInt(2) === 0)
+      L(o, 0.3, "Processing triggers for man-db (" + rndInt(2, 4) + "." + rndInt(8, 12) + "." + rndInt(0, 4) + "-2) ...");
+    return o;
+  }
+}
+
+/** git clone — remote counting + receiving objects with progress. */
+class GitCloneCommand {
+  build() {
+    this.repo = SD.repo(); this.name = this.repo.split("/")[1];
+    return "git clone https://git.mesh.internal/" + this.repo + ".git";
+  }
+  // Appends a starting line then replace-updates towards ~95%.
+  prog(o, stepDelay, steps, fn, color) {
+    L(o, 0.1, fn(rndInt(2, 9)), color);
+    for (let i = 1; i <= steps; i++) {
+      const p = Math.min(97, ((100 * i / (steps + 1)) | 0) + rndInt(-4, 5));
+      R(o, stepDelay * (0.6 + rnd() * 0.8), fn(p), color);
+    }
+  }
+  run() {
+    const o = [];
+    const objects = 800 + rndInt(12000);
+    const deltas = (objects * (0.45 + rnd() * 0.2)) | 0;
+    const sizeMb = 0.5 + objects * 0.002 * (0.5 + rnd());
+    L(o, 0.3 + rnd() * 0.4, "Cloning into '" + this.name + "'...");
+    L(o, 0.4 + rnd() * 0.8, "remote: Enumerating objects: " + objects + ", done.", SC_DIM);
+
+    this.prog(o, 0.05, 3, function (p) {
+      return "remote: Counting objects: " + p + "% (" + ((objects * p / 100) | 0) + "/" + objects + ")";
+    }, SC_DIM);
+    R(o, 0.05, "remote: Counting objects: 100% (" + objects + "/" + objects + "), done.", SC_DIM);
+
+    const compressed = (objects * 0.44) | 0;
+    this.prog(o, 0.07, 4, function (p) {
+      return "remote: Compressing objects: " + p + "% (" + ((compressed * p / 100) | 0) + "/" + compressed + ")";
+    }, SC_DIM);
+    R(o, 0.05, "remote: Compressing objects: 100% (" + compressed + "/" + compressed + "), done.", SC_DIM);
+
+    // Receiving is the slow, satisfying part.
+    const speed = 1.5 + rnd() * 8;
+    this.prog(o, 0.10 + rnd() * 0.10, 9, function (p) {
+      return "Receiving objects: " + p + "% (" + ((objects * p / 100) | 0) + "/" + objects + "), " +
+        (sizeMb * p / 100).toFixed(2) + " MiB | " + speed.toFixed(2) + " MiB/s";
+    });
+    R(o, 0.1, "Receiving objects: 100% (" + objects + "/" + objects + "), " + sizeMb.toFixed(2) +
+      " MiB | " + speed.toFixed(2) + " MiB/s, done.");
+
+    this.prog(o, 0.06, 4, function (p) {
+      return "Resolving deltas: " + p + "% (" + ((deltas * p / 100) | 0) + "/" + deltas + ")";
+    });
+    R(o, 0.05, "Resolving deltas: 100% (" + deltas + "/" + deltas + "), done.");
+    return o;
+  }
+}
+
+/** make -jN — cmake-style percent build lines with warnings. */
+class MakeCommand {
+  build() {
+    this.target = SD.repo().split("/")[1];
+    return "make -j" + (1 << rndInt(1, 5));
+  }
+  run() {
+    const o = [], files = takeShuffled(SD.SourceFiles, 8 + rndInt(7));
+    for (let i = 0; i < files.length; i++) {
+      const pct = (100 * (i + 1) / (files.length + 1)) | 0;
+      L(o, 0.08 + rnd() * 0.45, "[" + padL(pct, 3) + "%] Building C object src/CMakeFiles/" + this.target + ".dir/" + files[i] + ".o");
+      if (rndInt(100) < 18)
+        L(o, 0.05, files[i] + ":" + rndInt(20, 900) + ":" + rndInt(2, 40) +
+          ": warning: unused variable '" + SD.symbol() + "' [-Wunused-variable]", SC_ORANGE);
+    }
+    L(o, 0.3 + rnd() * 0.7, "[100%] Linking C executable " + this.target);
+    L(o, 0.4 + rnd() * 0.6, "[100%] Built target " + this.target, SC_GREEN);
+    return o;
+  }
+}
+
+/** ls -la — instant burst listing with dir/executable colours. */
+const LS_NAMES = ["config.toml","manifest.lock","quorum.db","journal.log","relay.sock","seal.key","snapshot.tar.zst","probe.pid","ledger.idx","entropy.bin","bootstrap.sh","healthcheck.sh"];
+const LS_DIRS = ["shards","cache","keys","state","hooks","archive"];
+class LsCommand {
+  build() { this.path = SD.path(); return "ls -la " + this.path; }
+  row(dir, name, exec) {
+    const perms = dir ? "drwxr-xr-x" : exec ? "-rwxr-xr-x" : "-rw-r--r--";
+    const links = dir ? 2 + rndInt(5) : 1;
+    const size = dir ? 4096 : rndInt(120, 4800000);
+    return perms + " " + padL(links, 2) + " root root " + padL(size, 9) + " " + SD.fileDate() + " " + name;
+  }
+  run() {
+    const o = [];
+    L(o, 0.10 + rnd() * 0.15, "total " + rndInt(40, 900));
+    L(o, 0.02, this.row(true, "."));
+    L(o, 0.02, this.row(true, ".."));
+    const dirs = takeShuffled(LS_DIRS, 2 + rndInt(3));
+    for (let i = 0; i < dirs.length; i++) L(o, 0.02, this.row(true, dirs[i]), SC_CYAN);
+    const names = takeShuffled(LS_NAMES, 4 + rndInt(5));
+    for (let i = 0; i < names.length; i++) {
+      const exec = names[i].endsWith(".sh");
+      L(o, 0.02, this.row(false, names[i], exec), exec ? SC_GREEN : SC_DEFAULT);
+    }
+    return o;
+  }
+}
+
+/** df -h — instant mounted filesystem table. */
+class DfCommand {
+  build() { return "df -h"; }
+  row(fs, sizeGb, mount) {
+    const usePct = rndInt(18, 93), used = sizeGb * usePct / 100;
+    const S = function (gb) { return gb >= 1024 ? (gb / 1024).toFixed(1) + "T" : gb.toFixed(0) + "G"; };
+    return padR(fs, 15) + " " + padL(S(sizeGb), 4) + " " + padL(S(used), 5) + " " +
+      padL(S(sizeGb - used), 5) + " " + padL(usePct, 3) + "% " + mount;
+  }
+  run() {
+    const o = [];
+    L(o, 0.08, "Filesystem      Size  Used Avail Use% Mounted on", SC_WHITE);
+    L(o, 0.02, this.row("/dev/nvme0n1p2", 512, "/"));
+    L(o, 0.02, this.row("/dev/nvme0n1p1", 1, "/boot/efi"));
+    L(o, 0.02, "tmpfs            16G  1.2M   16G   1% /run");
+    L(o, 0.02, this.row("/dev/sda1", 2048, "/var/lib/mesh"));
+    L(o, 0.02, this.row("shardfs#quorum", 8192, "/srv/lattice"));
+    return o;
+  }
+}
+
+/** dd — one long silent pause, then the three stats lines. */
+class DdCommand {
+  build() {
+    this.count = 128 << rndInt(0, 4);
+    return "dd if=/dev/zero of=/tmp/bench.img bs=1M count=" + this.count + " oflag=direct";
+  }
+  run() {
+    const o = [];
+    const speed = 180 + rnd() * 900, secs = this.count / speed;
+    const bytes = this.count * 1024 * 1024;
+    // dd is famously silent while it works.
+    L(o, clamp(secs, 1.2, 4.0), this.count + "+0 records in");
+    L(o, 0.02, this.count + "+0 records out");
+    L(o, 0.02, bytes + " bytes (" + Math.trunc(bytes / 1000000) + " MB, " + this.count +
+      " MiB) copied, " + secs.toFixed(5) + " s, " + speed.toFixed(0) + " MB/s");
+    return o;
+  }
+}
+
+/** grep -rn — matches arrive in bursts as the "disk" is walked. */
+class GrepCommand {
+  build() {
+    this.symbol = SD.symbol(); this.path = SD.path();
+    return 'grep -rn "' + this.symbol + '" ' + this.path + "/src";
+  }
+  run() {
+    const o = [], s = this.symbol;
+    const uses = [
+      "int rc = " + s + "(ctx, frame);",
+      "if (" + s + "(pool, 0) < 0)",
+      "/* TODO: retire " + s + " after v2 */",
+      "#define " + s.toUpperCase() + "_MAX 64",
+      "static int " + s + "(struct ctx *c, uint32_t id);",
+      "return " + s + "(shard->owner, id);"
+    ];
+    const matches = 4 + rndInt(4);
+    for (let i = 0; i < matches; i++) {
+      // Bursty: sometimes instant, sometimes the walk takes a moment.
+      const delay = rndInt(100) < 35 ? 0.25 + rnd() * 0.7 : 0.04;
+      L(o, delay, this.path + "/src/" + pick(SD.SourceFiles) + ":" + rndInt(18, 1200) + ":    " + pick(uses));
+    }
+    return o;
+  }
+}
+
+/** journalctl -u unit — quick burst of syslog-style lines. */
+class JournalctlCommand {
+  build() {
+    this.unit = SD.unit(); this.lines = 8 + rndInt(5);
+    return "journalctl -u " + this.unit + " -n " + this.lines + " --no-pager";
+  }
+  run() {
+    const o = [], host = SD.hostName(), pid = rndInt(300, 9000);
+    let t = Date.now() - rndInt(600, 7200) * 1000;
+    for (let i = 0; i < this.lines; i++) {
+      t += rndInt(2, 300) * 1000;
+      const line = RD.eventFeedLine();
+      const msg = line.t.replace(/^[▸●▲ ]+/, "");
+      const warn = line.k === K_ERROR || line.k === K_WARN;
+      const d = new Date(t);
+      const ts = MONTHS[d.getMonth()] + " " + pad0(d.getDate(), 2) + " " + hhmmss(d);
+      L(o, i === 0 ? 0.25 : 0.03, ts + " " + host + " " + this.unit + "[" + pid + "]: " +
+        (warn ? "warning: " : "") + msg, warn ? SC_ORANGE : SC_DEFAULT);
+    }
+    return o;
+  }
+}
+
+/** Invented tool: synctl — shard sync with a sealing bar. */
+class SynctlCommand {
+  build() {
+    this.shard = rndInt(0, 32);
+    this.mode = ["adaptive","strict","fast","deferred"][rndInt(4)];
+    return "synctl sync --shard " + this.shard + " --mode " + this.mode;
+  }
+  run() {
+    const o = [], ip = SD.ip();
+    const objects = 500 + rndInt(9000), stale = rndInt(0, (objects / 8) | 0);
+    const secs = 1 + rnd() * 4;
+    L(o, 0.2, "[sync] connecting to quorum @ " + ip + ":7433 ...");
+    R(o, 0.4 + rnd() * 0.8, "[sync] connecting to quorum @ " + ip + ":7433 ... ok");
+    L(o, 0.15, "[sync] shard " + pad0(this.shard, 2) + ": " + n0(objects) + " objects, " + n0(stale) + " stale (" + this.mode + ")");
+    const steps = 6 + rndInt(5);
+    L(o, 0.1, "[sync] sealing " + bar(0, 22) + "   0%", SC_DIM);
+    for (let i = 1; i <= steps; i++) {
+      const frac = i / steps;
+      R(o, secs / steps, "[sync] sealing " + bar(frac, 22) + " " + padL(Math.round(frac * 100), 3) + "%", SC_DIM);
+    }
+    R(o, 0.1, "[sync] sealed shard " + pad0(this.shard, 2) + " in " + secs.toFixed(2) + "s  ✔", SC_GREEN);
+    return o;
+  }
+}
+
+/** Invented tool: meshctl — handshake theatre with fictional peers. */
+class MeshctlCommand {
+  build() {
+    this.relay = SD.hostName(); this.token = "0x" + RD.hex(6);
+    return "meshctl join --relay " + this.relay + " --token " + this.token;
+  }
+  run() {
+    const o = [];
+    L(o, 0.2, "[mesh] resolving " + this.relay + ".mesh.internal ...");
+    R(o, 0.5 + rnd() * 0.7, "[mesh] resolving " + this.relay + ".mesh.internal ... " + SD.ip());
+    L(o, 0.3 + rnd() * 0.5, "[mesh] handshake: x25519 key exchange ... ok");
+    L(o, 0.2 + rnd() * 0.4, "[mesh] channel established (aes-256-gcm, lease 3600s)");
+    if (rndInt(100) < 25) L(o, 0.3, "[mesh] warning: clock skew 1.4s vs relay, compensating", SC_ORANGE);
+    L(o, 0.25 + rnd() * 0.5, "[mesh] joined lattice as node-" + rndInt(10, 99) +
+      " (ring " + rndInt(0, 8) + ", weight " + rndInt(1, 100) + ")", SC_GREEN);
+    return o;
+  }
+}
+
+/** tar -xvzf — fast scroll of members, stalling on the large ones. */
+const TAR_MEMBERS = ["state/manifest.lock","state/quorum.db","state/ledger.idx","shards/00.bin","shards/01.bin","shards/02.bin","shards/03.bin","keys/seal.key","keys/rotation.pem","hooks/pre-sync.sh","journal/segment-0001.log","journal/segment-0002.log","cache/bloom.bits","cache/hot.idx","config.toml","VERSION"];
+class TarCommand {
+  build() {
+    const d = new Date(Date.now() - rndInt(0, 14) * 86400000);
+    this.archive = "snapshot-" + d.getFullYear() + pad0(d.getMonth() + 1, 2) + pad0(d.getDate(), 2) + ".tar.gz";
+    this.dest = SD.path();
+    return "tar -xvzf " + this.archive + " -C " + this.dest;
+  }
+  run() {
+    const o = [], start = rndInt(TAR_MEMBERS.length);
+    const count = 8 + rndInt(TAR_MEMBERS.length - 7);
+    for (let i = 0; i < count; i++) {
+      const member = TAR_MEMBERS[(start + i) % TAR_MEMBERS.length];
+      // .bin shards are "large": the scroll visibly stalls on them.
+      const delay = member.endsWith(".bin") ? 0.30 + rnd() * 0.9 : 0.03 + rnd() * 0.06;
+      L(o, delay, member);
+    }
+    return o;
+  }
+}
+
+/** rsync -az --progress — per-file in-place progress, then the summary. */
+class RsyncCommand {
+  build() {
+    this.host = SD.hostName(); this.dest = SD.path();
+    return "rsync -az --progress ./build/ " + this.host + ":" + this.dest + "/";
+  }
+  run() {
+    const o = [];
+    L(o, 0.4 + rnd() * 0.8, "sending incremental file list");
+    const files = 3 + rndInt(4);
+    let totalBytes = 0;
+    for (let f = 0; f < files; f++) {
+      const name = pick(SD.SourceFiles) + ".o";
+      const size = rndInt(40000, 6000000);
+      totalBytes += size;
+      L(o, 0.10 + rnd() * 0.25, name);
+      // The progress line rewrites itself, like the real per-file counter.
+      const steps = 2 + rndInt(4);
+      for (let s = 1; s <= steps; s++) {
+        const frac = s / steps, rate = 2 + rnd() * 60;
+        const text = padL(n0i(Math.trunc(size * frac)), 14) + " " + padL(Math.round(frac * 100), 3) +
+          "% " + padL(rate.toFixed(2), 7) + "MB/s    0:00:0" + rndInt(0, 2);
+        if (s === 1) L(o, 0.10 + rnd() * 0.20, text, SC_DIM);
+        else R(o, 0.10 + rnd() * 0.25, text, SC_DIM);
+      }
+    }
+    const secs = 0.8 + rnd() * 4;
+    L(o, 0.25, "sent " + n0i(totalBytes) + " bytes  received " + n0i(rndInt(200, 4000)) +
+      " bytes  " + n2i(totalBytes / secs / 1000) + " kB/s");
+    L(o, 0.05, "total size is " + n0i(totalBytes * (2 + rndInt(4))) + "  speedup is " + (1 + rnd() * 3).toFixed(2));
+    return o;
+  }
+}
+
+/** systemctl status — the ● header block plus a short journal tail. */
+class SystemctlStatusCommand {
+  build() { this.unit = SD.unit(); return "systemctl status " + this.unit + " --no-pager"; }
+  run() {
+    const o = [];
+    const upH = rndInt(0, 72), upM = rndInt(0, 60);
+    const since = new Date(Date.now() - upH * 3600000 - upM * 60000);
+    const pid = rndInt(400, 9000);
+    const sinceStr = DAYS[since.getDay()] + " " + since.getFullYear() + "-" +
+      pad0(since.getMonth() + 1, 2) + "-" + pad0(since.getDate(), 2) + " " + hhmmss(since);
+    L(o, 0.15, "● " + this.unit + ".service - Synapse " + this.unit + " daemon", SC_WHITE);
+    L(o, 0.02, "     Loaded: loaded (/lib/systemd/system/" + this.unit + ".service; enabled; preset: enabled)");
+    L(o, 0.02, "     Active: active (running) since " + sinceStr + " UTC; " + (upH > 0 ? upH + "h " : "") + upM + "min ago", SC_GREEN);
+    L(o, 0.02, "   Main PID: " + pid + " (" + this.unit + ")");
+    L(o, 0.02, "      Tasks: " + rndInt(4, 64) + " (limit: " + rndInt(8, 76) * 512 + ")");
+    L(o, 0.02, "     Memory: " + rndInt(20, 900) + "." + rndInt(0, 9) + "M  CPU: " + rndInt(0, 40) + "min " + rndInt(0, 60) + "." + rndInt(100, 999) + "s");
+    L(o, 0.02, "");
+    let t = Date.now() - rndInt(5, 120) * 60000;
+    for (let i = 0; i < 3; i++) {
+      t += rndInt(1, 30) * 60000;
+      const line = RD.eventFeedLine();
+      const msg = line.t.replace(/^[▸●▲ ]+/, "");
+      const d = new Date(t);
+      L(o, 0.03, MONTHS[d.getMonth()] + " " + pad0(d.getDate(), 2) + " " + hhmmss(d) + " " +
+        SD.hostName() + " " + this.unit + "[" + pid + "]: " + msg, SC_DIM);
+    }
+    return o;
+  }
+}
+
+/** curl -sI — one thinking pause, then the header block at once. */
+class CurlCommand {
+  build() {
+    this.host = SD.host();
+    this.path = ["healthz","api/v2/quorum","metrics","dist/manifest.json"][rndInt(4)];
+    return "curl -sI https://" + this.host + "/" + this.path;
+  }
+  run() {
+    const o = [], d = new Date();
+    const date = DAYS[d.getUTCDay()] + ", " + pad0(d.getUTCDate(), 2) + " " + MONTHS[d.getUTCMonth()] + " " +
+      d.getUTCFullYear() + " " + pad0(d.getUTCHours(), 2) + ":" + pad0(d.getUTCMinutes(), 2) + ":" + pad0(d.getUTCSeconds(), 2);
+    L(o, 0.3 + rnd() * 0.9, "HTTP/2 200", SC_GREEN);
+    L(o, 0.02, "server: relayd/" + rndInt(1, 4) + "." + rndInt(0, 12) + "." + rndInt(0, 9));
+    L(o, 0.02, "date: " + date + " GMT");
+    L(o, 0.02, this.path.endsWith(".json") ? "content-type: application/json" : "content-type: text/plain; charset=utf-8");
+    L(o, 0.02, "content-length: " + rndInt(120, 900000));
+    L(o, 0.02, "x-mesh-node: " + SD.hostName());
+    L(o, 0.02, "x-request-id: " + RD.hex(16).toLowerCase());
+    L(o, 0.02, "cache-control: max-age=" + [0, 30, 300, 3600][rndInt(4)]);
+    return o;
+  }
+}
+
+/** sha256sum — one hash line per file, each after its hashing pause. */
+class Sha256sumCommand {
+  build() { this.dir = SD.path(); return "sha256sum " + this.dir + "/shards/*.bin"; }
+  run() {
+    const o = [], files = 4 + rndInt(4);
+    for (let i = 0; i < files; i++)
+      L(o, 0.2 + rnd() * 0.8, RD.hex(64).toLowerCase() + "  " + this.dir + "/shards/" + pad0(i, 2) + ".bin");
+    return o;
+  }
+}
+
+/** top -bn1 — instant one-shot snapshot. */
+class TopCommand {
+  build() { return "top -bn1 | head -n 12"; }
+  run() {
+    const o = [], d = new Date();
+    const upD = rndInt(0, 90);
+    const load = (rnd() * 4).toFixed(2) + ", " + (rnd() * 4).toFixed(2) + ", " + (rnd() * 4).toFixed(2);
+    const tasks = rndInt(120, 400);
+    L(o, 0.15, "top - " + hhmmss(d) + " up " + upD + " days, " + rndInt(0, 24) + ":" +
+      pad0(rndInt(0, 60), 2) + ",  1 user,  load average: " + load, SC_WHITE);
+    L(o, 0.02, "Tasks: " + tasks + " total,   " + rndInt(1, 5) + " running, " + (tasks - rndInt(1, 8)) +
+      " sleeping,   0 stopped,   0 zombie");
+    L(o, 0.02, "%Cpu(s): " + (rnd() * 40).toFixed(1) + " us,  " + (rnd() * 12).toFixed(1) +
+      " sy,  0.0 ni, " + (40 + rnd() * 55).toFixed(1) + " id");
+    L(o, 0.02, "MiB Mem : " + n1i(64210.4) + " total, " + n1i(rndInt(2000, 35000)) + " free, " + n1i(rndInt(8000, 30000)) + " used");
+    L(o, 0.02, "");
+    L(o, 0.02, "    PID USER      PR  NI    VIRT    RES  %CPU  %MEM     TIME+ COMMAND", SC_WHITE);
+    const shown = 4 + rndInt(3);
+    for (let i = 0; i < shown; i++) {
+      // NOTE: %MEM reproduces the C# custom format "0.1" verbatim — it
+      // rounds to a whole number then appends a literal ".1". Kept as-is so
+      // the two builds render identically.
+      L(o, 0.02, padL(rndInt(300, 9999), 7) + " root      20   0 " + padL(rndInt(80000, 4000000), 7) +
+        " " + padL(rndInt(10000, 900000), 6) + " " + padL((rnd() * 90).toFixed(1), 5) +
+        " " + padL(Math.round(rnd() * 8) + ".1", 5) + " " + rndInt(0, 900) + ":" +
+        pad0(rndInt(0, 60), 2) + "." + pad0(rndInt(0, 99), 2) + " " + pick(SD.Units));
+    }
+    return o;
+  }
+}
+
+/** All available commands — add new ones here. */
+function buildShellDeck() {
+  return [
+    new PingCommand(), new WgetCommand(), new DockerPullCommand(), new AptInstallCommand(),
+    new GitCloneCommand(), new MakeCommand(), new LsCommand(), new DfCommand(),
+    new DdCommand(), new GrepCommand(), new JournalctlCommand(), new SynctlCommand(),
+    new MeshctlCommand(), new TarCommand(), new RsyncCommand(), new SystemctlStatusCommand(),
+    new CurlCommand(), new Sha256sumCommand(), new TopCommand()
+  ];
+}
+
+/* ---------------------------------------------------------------------
+   Layout + dashboard
+   ------------------------------------------------------------------ */
+
+function jitter(base, amount) { return base + (rnd() * 2 - 1) * amount; }
+
+/** Owns every panel and computes the uneven dashboard layout. Split
+ *  fractions are jittered once per launch so the geometry differs each
+ *  time the page loads. */
+class PanelManager {
+  constructor() {
+    this.leftW = jitter(0.22, 0.02);
+    this.centerW = jitter(0.46, 0.02);
+    this.bottomH = jitter(0.18, 0.02);
+    this.leftSplit = jitter(0.58, 0.04);
+    this.rightSplit = jitter(0.55, 0.04);
+
+    this.leftTerminal = new TerminalPanel("SYS://TRACE", T.Green, RD.systemLogLine, 5, 11);
+    this.hex = new HexPanel();
+    this.code = new CodePanel();
+    this.company = new CompanyPanel();
+    this.shell = new ShellPanel();
+    this.graphs = new GraphPanel(2, true, 3);
+    this.progress = new ProgressPanel();
+    this.binary = new BinaryPanel();
+    this.panels = [this.leftTerminal, this.hex, this.code, this.company,
+                   this.shell, this.graphs, this.progress, this.binary];
+  }
+  update(dt) { for (let i = 0; i < this.panels.length; i++) this.panels[i].update(dt); }
+  layout(width, height) {
+    const gap = 6, margin = 8;
+    const w = width - margin * 2, h = height - margin * 2;
+    const x0 = margin, y0 = margin;
+
+    const bottomH = h * this.bottomH;
+    const topH = h - bottomH - gap;
+    const leftW = w * this.leftW;
+    const centerW = w * this.centerW;
+    const rightW = w - leftW - centerW - gap * 2;
+    const cx = x0 + leftW + gap;
+    const rx = cx + centerW + gap;
+
+    const set = function (p, x, y, pw, ph) { p.x = x; p.y = y; p.w = pw; p.h = ph; };
+
+    // Left column: tall terminal above hex viewer.
+    const leftTermH = topH * this.leftSplit;
+    set(this.leftTerminal, x0, y0, leftW, leftTermH);
+    set(this.hex, x0, y0 + leftTermH + gap, leftW, topH - leftTermH - gap);
+
+    // Centre column: the endless code writer is the star of the show.
+    set(this.code, cx, y0, centerW, topH);
+
+    // Right column: company showcase above the fake terminal.
+    const companyH = topH * this.rightSplit;
+    set(this.company, rx, y0, rightW, companyH);
+    set(this.shell, rx, y0 + companyH + gap, rightW, topH - companyH - gap);
+
+    // Bottom strip: telemetry, task pipeline, binary stream.
+    const by = y0 + topH + gap;
+    const teleW = w * 0.38, progW = w * 0.36;
+    const binW = w - teleW - progW - gap * 2;
+    set(this.graphs, x0, by, teleW, bottomH);
+    set(this.progress, x0 + teleW + gap, by, progW, bottomH);
+    set(this.binary, x0 + teleW + progW + gap * 2, by, binW, bottomH);
+  }
+}
+
+/** Root: clears, draws the wallpaper + panels, then the CRT overlays. */
+class Dashboard {
+  constructor() {
+    this.panels = new PanelManager();
+    this.bg = new BackgroundLayer(pick(BG_KEYS));
+    this.time = 0;
+    this.flickerTimer = 3; this.flickerLeft = 0;
+    this.glitchTimer = 5; this.glitchLeft = 0; this.glitchY = 0;
+    this.scanPattern = null;
+    this.vignette = null;
+  }
+  /** Swaps in a different wallpaper without reloading, punctuated with a
+   *  glitch burst so the change reads as intentional. Never re-rolls onto
+   *  the wallpaper already showing. */
+  reroll() {
+    let keys = BG_KEYS;
+    if (keys.length > 1) {
+      const self = this;
+      keys = keys.filter(function (k) { return k !== self.bg.key; });
+    }
+    this.bg = new BackgroundLayer(pick(keys));
+    this.glitchLeft = 0.18;
+    this.glitchY = rnd();
+  }
+  resized() {
+    this.panels.layout(VW, VH);
+    this.bg.invalidate();
+
+    // Scanlines as a 4px-tall repeating pattern: one fillRect per frame
+    // instead of a DrawLine for every fourth row of a 4K screen.
+    const pc = document.createElement("canvas");
+    pc.width = 1; pc.height = 4;
+    const px = pc.getContext("2d");
+    px.fillStyle = "rgba(0,0,0,0.10)";
+    px.fillRect(0, 0, 1, 1);
+    this.scanPattern = ctx.createPattern(pc, "repeat");
+
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.75);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(0.75, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.35)");
+    this.vignette = g;
+  }
+  update(dt) {
+    this.time += dt;
+    this.panels.update(dt);
+    this.bg.update(dt);
+
+    this.flickerLeft -= dt;
+    this.flickerTimer -= dt;
+    if (this.flickerTimer <= 0) {
+      this.flickerTimer = 4 + rnd() * 9;
+      this.flickerLeft = 0.06 + rnd() * 0.08;
+    }
+    this.glitchLeft -= dt;
+    this.glitchTimer -= dt;
+    if (this.glitchTimer <= 0) {
+      this.glitchTimer = 6 + rnd() * 12;
+      this.glitchLeft = 0.10 + rnd() * 0.15;
+      this.glitchY = rnd();
+    }
+  }
+  draw() {
+    // Cleared to the wallpaper's own backdrop colour, not the theme black,
+    // so a contained image shows no rectangle edge against it.
+    ctx.fillStyle = this.bg.backdrop;
+    ctx.fillRect(0, 0, VW, VH);
+    this.bg.draw(this.glitchLeft > 0 ? 1 : 0);
+
+    const panels = this.panels.panels;
+    for (let i = 0; i < panels.length; i++) panels[i].render();
+
+    this.drawOverlays();
+  }
+  drawOverlays() {
+    // Slowly drifting scanlines — subtle so text stays readable.
+    if (this.scanPattern) {
+      const phase = (this.time * 12) % 4;
+      ctx.save();
+      ctx.translate(0, phase);
+      ctx.fillStyle = this.scanPattern;
+      ctx.fillRect(0, -phase, VW, VH + 4);
+      ctx.restore();
+    }
+
+    // A brighter "refresh band" sweeping down the screen.
+    const bandY = ((this.time * 0.09) % 1.25) * VH * 1.25 - VH * 0.125;
+    ctx.fillStyle = fade(T.Green, 0.025);
+    ctx.fillRect(0, bandY, VW, VH * 0.10);
+
+    if (this.flickerLeft > 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.03)";
+      ctx.fillRect(0, 0, VW, VH);
+    }
+
+    if (this.glitchLeft > 0) {
+      const gy = this.glitchY * VH;
+      const gh = 3 + ((this.glitchLeft * 40) % 6);
+      ctx.fillStyle = fade(T.Cyan, 0.10);
+      ctx.fillRect(3, gy, VW, gh);
+      ctx.fillStyle = fade(T.Red, 0.08);
+      ctx.fillRect(-3, gy + gh, VW, gh * 0.6);
+    }
+
+    // Soft radial vignette for the CRT feel.
+    if (this.vignette) {
+      ctx.save();
+      ctx.translate(VW / 2, VH / 2);
+      ctx.scale(VW, VH);
+      ctx.fillStyle = this.vignette;
+      ctx.fillRect(-0.5, -0.5, 1, 1);
+      ctx.restore();
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Bootstrap
+   ------------------------------------------------------------------ */
+
+let dashboard = null;
+function onResize() { if (dashboard) dashboard.resized(); }
+
+window.addEventListener("resize", resize);
+// F6 re-rolls the wallpaper, matching the MAUI build's keybind.
+window.addEventListener("keydown", function (e) {
+  if (e.key === "F6") { e.preventDefault(); dashboard.reroll(); }
+});
+
+resize();
+dashboard = new Dashboard();
+dashboard.resized();
+
+/* --- frame loop ------------------------------------------------------ */
+
+// Everything is delta-time based, so the redraw rate is a pure cost knob:
+// on a 144/200 Hz display an uncapped rAF loop would redraw 2-3x as often
+// for output that is identical, which as a wallpaper is wasted GPU. 60 is
+// the design rate (the MAUI build ran a 60 FPS timer); a host that limits
+// the whole desktop lower than that takes over, see wallpaperPropertyListener
+// below. The 0.9 factor keeps a display running exactly at the cap from
+// occasionally missing its slot and halving.
+const FPS_MAX = 60;
+let hostFps = -1;                    // -1 until a host reports its limit
+let targetDt = 1 / FPS_MAX;
+function applyFpsCap() {
+  const cap = hostFps >= 0 ? Math.min(hostFps, FPS_MAX) : FPS_MAX;
+  targetDt = 1 / Math.max(1, cap);
+}
+
+let last = performance.now();
+let rafId = 0, wePaused = false;
+
+function tick(now) {
+  rafId = requestAnimationFrame(tick);
+  let dt = (now - last) / 1000;
+  if (dt < targetDt * 0.9) return;
+  last = now;
+  // Clamp huge gaps (tab suspended, machine asleep) so nothing leaps.
+  if (dt > 0.25) dt = 0.25;
+  dashboard.update(dt);
+  dashboard.draw();
+}
+
+// Stop animating while hidden or paused by the host — as a wallpaper this
+// may sit behind fullscreen windows for hours.
+function syncRunning() {
+  const should = !document.hidden && !wePaused;
+  if (should && !rafId) {
+    last = performance.now();
+    rafId = requestAnimationFrame(tick);
+  } else if (!should && rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+}
+document.addEventListener("visibilitychange", syncRunning);
+syncRunning();
+
+/* Wallpaper Engine pushes its general settings — among them the frame
+   limit it applies to the whole desktop — through this listener, and tells
+   the wallpaper when it is paused. In a browser neither ever fires and the
+   wallpaper behaves exactly as it always has.
+   https://docs.wallpaperengine.io/en/web/performance/fps.html */
+window.wallpaperPropertyListener = {
+  setPaused: function (p) { wePaused = !!p; syncRunning(); },
+  applyGeneralProperties: function (props) {
+    // fires for other general properties too — only act when fps is present
+    if (!props || props.fps === undefined) return;
+    const raw = props.fps;
+    const v = Number(raw && typeof raw === "object" ? raw.value : raw);
+    if (!Number.isFinite(v) || v < 0) return;
+    hostFps = Math.round(v);
+    applyFpsCap();
+  }
+};
+
+/* Debug/test hook. The Claude Browser pane reports document.hidden=true,
+   so rAF never fires there; automated checks drive the wallpaper through
+   this instead and sample the canvas. step() is synchronous and bypasses
+   the frame cap and the running state entirely, so a stepped frame is
+   never silently swallowed. Harmless in production. */
+window.__hacker = {
+  dashboard: function () { return dashboard; },
+  panels: function () { return dashboard.panels; },
+  backgrounds: BG_KEYS,
+  step: function (dt) { dashboard.update(dt === undefined ? 1 / 60 : dt); dashboard.draw(); },
+  stop: function () { wePaused = true; syncRunning(); },
+  start: function () { wePaused = false; syncRunning(); },
+  reroll: function () { dashboard.reroll(); },
+  setBackground: function (key) { dashboard.bg = new BackgroundLayer(key); },
+  setHostFps: function (v) { window.wallpaperPropertyListener.applyGeneralProperties({ fps: v }); },
+  fpsCap: function () { return 1 / targetDt; }
+};
+</script>
+</body>
+</html>

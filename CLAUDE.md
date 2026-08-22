@@ -3,8 +3,9 @@
 This CLAUDE file was generated using Claude itself, based on chat history.
 
 A GitHub Pages repo of self-contained animated web wallpapers, one folder per
-wallpaper (`blackhole/`, `neonscape/`), each a single `index.html` with optional
-assets if required. Root `index.html` is a gallery.
+wallpaper (`blackhole/`, `neonscape/`, `hacker/`), each a single `index.html`
+with optional assets if required. Root `index.html` is a gallery — a wallpaper
+is added to it only when the user says it is released.
 
 Nothing here assumes a particular rendering library or host. Wallpapers may use
 raw WebGL, a library, or plain canvas/CSS, and must work as an ordinary static
@@ -100,6 +101,7 @@ that serializes.
 | --- | --- | --- |
 | `blackhole/` | Released | **Required** |
 | `neonscape/` | Released | **Required** |
+| `hacker/` | WIP, not released | Not required |
 
 **Not yet released — ignore save compatibility entirely.** No version fields, no
 legacy-key shims, no migration paths. Rename, restructure and drop state keys
@@ -143,7 +145,9 @@ completely bogus measurements:
   across reloads, so don't trust a stale error as current.
 
 If a wallpaper's script is a module, its internals aren't global — the debug hook
-is the only way in.
+is the only way in. Hooks: `__neon` (neonscape, module), `__hacker` (hacker,
+classic script — `step(dt)` is synchronous and bypasses the fps cap),
+`BlackHole` console API (blackhole).
 
 To test against a live embedded host, Wallpaper Engine's `config.json` sets
 `--remote-debugging-port=8887 --remote-allow-origins=*`, so the running wallpaper
