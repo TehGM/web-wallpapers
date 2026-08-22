@@ -24,8 +24,8 @@
    local logo/background images in ./assets.
 
    Everything renders into one 2D <canvas> from a single rAF loop. Panels
-   are classes with update(dt)/drawContent(rect); PanelManager owns them
-   and lays them out, Dashboard draws background + panels + CRT overlays.
+   are classes with update(dt) plus drawStatic/drawLive(rect); PanelManager
+   owns and lays them out; Dashboard draws background + panels + overlays.
    See README.md for the panel list and the window.__hacker test hook.
    ===================================================================== */
 
@@ -109,6 +109,11 @@ function fontMono(size)     { return size + "px " + MONO; }
 function fontMonoBold(size) { return "700 " + size + "px " + MONO; }
 function lineHeight(size)   { return size * 1.35; }
 
+// Text measurement gets a context of its own, so it can never disturb the
+// font state of whatever surface is being drawn into — Layer (below) swaps
+// the global `ctx` between the screen and offscreen bitmaps.
+const measureCtx = document.createElement("canvas").getContext("2d");
+
 // Monospace advance width, measured once per size and cached. The MAUI
 // build hardcodes 0.55em (Consolas); measuring keeps layout and glyphs in
 // register even when a fallback font is substituted.
@@ -116,8 +121,8 @@ const _cwCache = new Map();
 function charW(size) {
   let w = _cwCache.get(size);
   if (w === undefined) {
-    ctx.font = fontMono(size);
-    w = ctx.measureText("0000000000").width / 10;
+    measureCtx.font = fontMono(size);
+    w = measureCtx.measureText("0000000000").width / 10;
     _cwCache.set(size, w);
   }
   return w;
@@ -130,8 +135,8 @@ const _blockCache = new Map();
 function blockMetrics(size) {
   let m = _blockCache.get(size);
   if (m === undefined) {
-    ctx.font = fontMono(size);
-    const t = ctx.measureText("█");
+    measureCtx.font = fontMono(size);
+    const t = measureCtx.measureText("█");
     m = { asc: t.actualBoundingBoxAscent, desc: t.actualBoundingBoxDescent };
     _blockCache.set(size, m);
   }
@@ -149,7 +154,9 @@ function ditherPattern(css) {
     const dx = dc.getContext("2d");
     dx.fillStyle = css;
     dx.fillRect(0, 0, 1, 1);
-    p = ctx.createPattern(dc, "repeat");
+    // Built from the screen context, not whatever Layer may have swapped
+    // in — the cache outlives any one repaint.
+    p = screenCtx.createPattern(dc, "repeat");
     _ditherCache.set(css, p);
   }
   return p;
@@ -176,23 +183,77 @@ function shuffled(arr) {
 function takeShuffled(arr, n) { return shuffled(arr).slice(0, n); }
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
-// The MAUI build runs under a pl-PL culture, so plain (non-invariant)
-// numeric formats use a space group separator and a comma decimal mark.
-// These reproduce exactly what is on screen there.
-function n0(v) {                                  // "N0", culture
-  v = Math.round(v);
-  const neg = v < 0; if (neg) v = -v;
-  let s = String(v), out = "";
-  while (s.length > 3) { out = " " + s.slice(-3) + out; s = s.slice(0, -3); }
-  return (neg ? "-" : "") + s + out;
-}
+/* Two number formats live on this screen, and they are deliberately
+   different.
+
+   Panel readouts — the telemetry counters and the chart values — are this
+   wallpaper's own UI, so they follow the viewer's locale the way any
+   desktop app's readouts would: 31,190 / 31 190 / 31.190 depending on
+   where you are.
+
+   Shell output does not, and must not. A real terminal runs in the C
+   locale: ls, df, rsync, apt and the rest print 1,234 with a comma and
+   0.5 with a point wherever in the world they run. Localising those would
+   be the one detail that gives the illusion away — so everything inside a
+   fake command's output goes through n0i / n1i / n2i, which are invariant
+   by construction.
+
+   The MAUI build had no such split. It ran under a pl-PL culture, and its
+   plain (non-invariant) numeric formats leaked that locale into the fake
+   shell output as well. */
 function n0i(v) {                                 // "N0", invariant
   return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
-function fixC(v, d) { return v.toFixed(d).replace(".", ","); }   // culture decimals
 function n2i(v) {                                 // "N2", invariant
   const p = v.toFixed(2).split(".");
   return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + p[1];
+}
+
+const UI_LOCALE = (function () {
+  try {
+    return (navigator.languages && navigator.languages[0]) || navigator.language || "en-US";
+  } catch (e) { return "en-US"; }
+})();
+
+/* Intl formatters are costly to build and cheap to reuse, so one is kept
+   per decimal count. Two constraints come from drawing into a monospace
+   grid rather than into a document:
+
+   - `latn` digits are forced. A locale such as ar-EG would otherwise
+     format with Arabic-Indic digits, which this font does not carry and
+     which run the other way.
+   - the result is sanitised. Several locales group with U+00A0 or U+202F
+     and sign with U+2212; in a monospace face those are either a
+     different advance width or a missing glyph, and the column alignment
+     everything here is laid out on would break. */
+const _nfCache = new Map();
+function _nf(digits) {
+  let f = _nfCache.get(digits);
+  if (f === undefined) {
+    try {
+      f = new Intl.NumberFormat(UI_LOCALE, {
+        numberingSystem: "latn",
+        minimumFractionDigits: digits, maximumFractionDigits: digits
+      });
+    } catch (e) { f = null; }                     // no Intl, or a tag it rejects
+    _nfCache.set(digits, f);
+  }
+  return f;
+}
+// Group separators some locales use (U+00A0, U+202F, U+2009) become a plain
+// space, and U+2212 MINUS becomes "-", so every glyph has the mono advance.
+function _plain(s) {
+  return s.replace(/[\u00A0\u202F\u2009]/g, " ").replace(/\u2212/g, "-");
+}
+/** Locale-formatted integer, for panel readouts only. */
+function uiInt(v) {
+  const f = _nf(0);
+  return f ? _plain(f.format(Math.round(v))) : n0i(v);
+}
+/** Locale-formatted fixed-decimal value, for panel readouts only. */
+function uiFix(v, d) {
+  const f = _nf(d);
+  return f ? _plain(f.format(v)) : v.toFixed(d);
 }
 function padL(s, n) { s = String(s); return s.length >= n ? s : " ".repeat(n - s.length) + s; }
 function padR(s, n) { s = String(s); return s.length >= n ? s : s + " ".repeat(n - s.length); }
@@ -317,7 +378,28 @@ const Logos = (function () {
    ------------------------------------------------------------------ */
 
 const canvas = document.getElementById("screen");
-const ctx = canvas.getContext("2d", { alpha: false });
+
+/* alpha:true, deliberately, even though every pixel is painted every frame
+   and the alpha channel is never used.
+
+   An opaque canvas gets LCD subpixel-antialiased text; a canvas with an
+   alpha channel gets grayscale. Layer (below) caches panel content in
+   offscreen canvases, which must be transparent and are therefore always
+   grayscale — so with an opaque screen canvas the two would disagree, and
+   text would visibly change character the moment it moved from live
+   drawing into a cache (measured: 73% of differing pixels showed unequal
+   per-channel deltas, the RGB-fringe signature, up to 143 code values on a
+   single channel). Matching them makes the cached path pixel-identical to
+   the uncached one.
+
+   Grayscale is also the right choice here on its own merits: subpixel AA
+   bakes in one specific physical RGB-stripe layout, and a wallpaper gets
+   scaled and recomposited by its host onto panels that may not have one.
+   Cost of the alpha channel, measured: none outside noise. */
+// Not const: Layer retargets every drawing helper at an offscreen canvas
+// by swapping this for the duration of one repaint.
+let ctx = canvas.getContext("2d", { alpha: true });
+const screenCtx = ctx;
 let VW = 0, VH = 0, DPR = 1;
 
 function resize() {
@@ -334,6 +416,24 @@ function resize() {
   _cwCache.clear();
   _blockCache.clear();
   onResize();
+}
+
+/** The same shape as roundRect(), built once into a reusable Path2D.
+ *  Panel frames are stroked and filled several times per frame but only
+ *  change when the layout does, so they are built per layout, not per
+ *  frame. */
+function roundRectPath(x, y, w, h, r) {
+  const p = new Path2D();
+  if (p.roundRect) { p.roundRect(x, y, w, h, r); return p; }
+  if (r > w / 2) r = w / 2;
+  if (r > h / 2) r = h / 2;
+  p.moveTo(x + r, y);
+  p.arcTo(x + w, y, x + w, y + h, r);
+  p.arcTo(x + w, y + h, x, y + h, r);
+  p.arcTo(x, y + h, x, y, r);
+  p.arcTo(x, y, x + w, y, r);
+  p.closePath();
+  return p;
 }
 
 // Rounded rectangle with a fallback for engines without ctx.roundRect.
@@ -358,6 +458,73 @@ function textR(s, x, w, y, h) { ctx.textAlign = "right"; ctx.fillText(s, x + w, 
 function textC(s, x, w, y, h) { ctx.textAlign = "center"; ctx.fillText(s, x + w / 2, y + h / 2); }
 
 /* ---------------------------------------------------------------------
+   Layer — cached panel content
+
+   These panels are redrawn at the frame rate, but almost nothing on them
+   changes at the frame rate. A terminal emits a few lines a second, the
+   hex dump eight rows, the code writer finishes a line about twice a
+   second; the charts take a sample ten times a second. Repainting thirty
+   or forty fillText calls sixty times a second for content that is
+   character-for-character identical to the last frame was, measured, over
+   80% of this wallpaper's cost.
+
+   A Layer is an offscreen canvas covering one panel's rect. It repaints
+   only when the panel invalidates it, and every other frame costs a
+   single drawImage. The drawing code inside is completely unchanged: the
+   layer carries the panel's own screen coordinates and swaps itself in as
+   the global `ctx`, so textL/fade/charW and the rest behave exactly as
+   they do when drawing live.
+
+   Anything that genuinely does change every frame — the blinking cursor,
+   the line currently being typed, the counters — stays out of the layer
+   and is drawn live on top of it.
+
+   The offscreen bitmap is aligned to whole device pixels and blitted at
+   an integer device offset, so text lands on exactly the subpixel
+   positions it would have landed on had it been drawn straight to the
+   screen. Getting that wrong resamples the blit and visibly softens every
+   glyph.
+   ------------------------------------------------------------------ */
+class Layer {
+  constructor() {
+    this.cv = null; this.cx = null;
+    this.dx = 0; this.dy = 0; this.pw = 0; this.ph = 0;
+    this.dirty = true;
+  }
+  invalidate() { this.dirty = true; }
+  /** Repaints through fn(rect) if needed, then blits. `pad` widens the
+   *  bitmap in CSS px, for strokes that spill outside the rect. */
+  draw(r, fn, pad) {
+    pad = pad || 0;
+    const dx = Math.floor((r.x - pad) * DPR), dy = Math.floor((r.y - pad) * DPR);
+    const pw = Math.ceil((r.w + pad * 2) * DPR) + 2;
+    const ph = Math.ceil((r.h + pad * 2) * DPR) + 2;
+    if (!this.cv) this.cv = document.createElement("canvas");
+    if (this.pw !== pw || this.ph !== ph) {
+      this.cv.width = pw; this.cv.height = ph;      // resizing also clears
+      this.pw = pw; this.ph = ph;
+      this.cx = this.cv.getContext("2d");
+      this.dirty = true;
+    }
+    if (this.dx !== dx || this.dy !== dy) { this.dx = dx; this.dy = dy; this.dirty = true; }
+    if (this.dirty) {
+      this.dirty = false;
+      const cx = this.cx;
+      cx.setTransform(1, 0, 0, 1, 0, 0);
+      cx.clearRect(0, 0, pw, ph);
+      // Same scale as the screen, offset by whole device pixels, so a
+      // point at CSS x lands at the same fraction of a pixel as on screen.
+      cx.setTransform(DPR, 0, 0, DPR, -dx, -dy);
+      cx.textBaseline = "middle";
+      const prev = ctx;
+      ctx = cx;
+      try { fn(r); } finally { ctx = prev; }
+    }
+    ctx.drawImage(this.cv, dx / DPR, dy / DPR, pw / DPR, ph / DPR);
+  }
+}
+
+/* ---------------------------------------------------------------------
    Panel base
    ------------------------------------------------------------------ */
 
@@ -369,8 +536,43 @@ class Panel {
     this.title = "";
     this.accent = T.Green;
     this._pulse = rnd() * Math.PI * 2;
+    /* One cached bitmap per panel, holding the frame, the title bar and
+       whatever part of the content is not changing this frame. Bound once:
+       Layer takes a callback every frame, and binding per frame would
+       allocate a closure per panel per frame. */
+    this.layer = new Layer();
+    this._paint = this.paint.bind(this);
+    this._panelRect = { x: 0, y: 0, w: 0, h: 0 };
+    this._glowQ = -1;
+    // Panels whose content is entirely cached (the hex dump, the binary
+    // stream) need no clip and no live pass at all — subclass prototypes
+    // are in place by the time a base constructor runs, so this is known
+    // here, once, rather than tested every frame.
+    this._hasLive = this.drawLive !== Panel.prototype.drawLive;
+    // Frame geometry, rebuilt only when the layout moves (see syncPaths).
+    this._framePath = null; this._titlePath = null;
+    this._px = NaN; this._py = NaN; this._pw = NaN; this._ph = NaN;
   }
-  update(dt) { this._pulse += dt * 1.5; }
+  update(dt) {
+    this._pulse += dt * 1.5;
+    // fade() quantises alpha to 1/64, so the border glow only changes
+    // colour about five times a second however smoothly its sine moves.
+    // Repainting on those steps alone keeps the frame animated without
+    // making the cache useless.
+    const q = ((0.35 + 0.15 * Math.sin(this._pulse)) * 0.5 * 64) | 0;
+    if (q !== this._glowQ) { this._glowQ = q; this.layer.invalidate(); }
+  }
+  /** The panel frame is filled once and stroked twice every frame, and the
+   *  title bar filled once. Rebuilding those rounded rects each time — four
+   *  path constructions per panel per frame, eight panels — was most of
+   *  what the chrome cost. They only change when the layout does. */
+  syncPaths() {
+    if (this._px === this.x && this._py === this.y &&
+        this._pw === this.w && this._ph === this.h) return;
+    this._px = this.x; this._py = this.y; this._pw = this.w; this._ph = this.h;
+    this._framePath = roundRectPath(this.x, this.y, this.w, this.h, 4);
+    this._titlePath = roundRectPath(this.x, this.y, this.w, TITLE_BAR_H, 4);
+  }
   contentRect() {
     const top = this.title ? TITLE_BAR_H + PAD / 2 : PAD;
     return {
@@ -378,34 +580,29 @@ class Panel {
       w: this.w - PAD * 2, h: this.h - top - PAD
     };
   }
-  render() {
+  /** Painted into the layer: the frame, the title bar, and the part of the
+   *  content that is stable between invalidations. */
+  paint() {
     const b = this;
-    if (b.w < 20 || b.h < 20) return;
-
     ctx.fillStyle = PANEL_FILL;
-    roundRect(b.x, b.y, b.w, b.h, 4); ctx.fill();
+    ctx.fill(this._framePath);
 
-    // Neon border: soft outer glow stroke + crisp inner stroke.
+    // Neon border: soft outer glow stroke + crisp inner stroke. One path,
+    // built per layout rather than three times per frame.
     const glow = 0.35 + 0.15 * Math.sin(this._pulse);
     ctx.lineWidth = 3;
     ctx.strokeStyle = fade(this.accent, glow * 0.5);
-    roundRect(b.x, b.y, b.w, b.h, 4); ctx.stroke();
+    ctx.stroke(this._framePath);
     ctx.lineWidth = 1;
     ctx.strokeStyle = fade(this.accent, 0.9);
-    roundRect(b.x, b.y, b.w, b.h, 4); ctx.stroke();
+    ctx.stroke(this._framePath);
 
     if (this.title) {
       ctx.fillStyle = fade(this.accent, 0.10);
-      roundRect(b.x, b.y, b.w, TITLE_BAR_H, 4); ctx.fill();
+      ctx.fill(this._titlePath);
       ctx.font = fontMonoBold(10);
       ctx.fillStyle = this.accent.css;
       textL("┃ " + this.title, b.x + 6, b.y, TITLE_BAR_H);
-
-      const dotA = 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2));
-      ctx.fillStyle = fade(this.accent, dotA);
-      ctx.beginPath();
-      ctx.arc(b.x + b.w - 10, b.y + TITLE_BAR_H / 2, 2.5, 0, Math.PI * 2);
-      ctx.fill();
     }
 
     const r = this.contentRect();
@@ -413,10 +610,42 @@ class Panel {
     ctx.beginPath();
     ctx.rect(r.x, r.y, r.w, r.h);
     ctx.clip();
-    this.drawContent(r);
+    this.drawStatic(r);
     ctx.restore();
   }
-  drawContent(_r) {}
+  render() {
+    const b = this;
+    if (b.w < 20 || b.h < 20) return;
+    this.syncPaths();
+
+    const pr = this._panelRect;
+    pr.x = b.x; pr.y = b.y; pr.w = b.w; pr.h = b.h;
+    this.layer.draw(pr, this._paint, 3);
+
+    if (this._hasLive) {
+      const r = this.contentRect();
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(r.x, r.y, r.w, r.h);
+      ctx.clip();
+      this.drawLive(r);
+      ctx.restore();
+    }
+
+    // The title dot blinks about six times a second — too fast to be worth
+    // a repaint of the panel, and one arc is cheaper than one anyway.
+    if (this.title) {
+      const dotA = 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2));
+      ctx.fillStyle = fade(this.accent, dotA);
+      ctx.beginPath();
+      ctx.arc(b.x + b.w - 10, b.y + TITLE_BAR_H / 2, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  /** Content that changes only when the panel says so. */
+  drawStatic(_r) {}
+  /** Content that genuinely changes every frame. */
+  drawLive(_r) {}
 }
 
 /* ---------------------------------------------------------------------
@@ -566,6 +795,9 @@ class TerminalPanel extends Panel {
     const l = this.gen();
     this.lines.push(l);
     if (this.lines.length > 90) this.lines.splice(0, this.lines.length - 90);
+    // Every line's age-fade shifts when a new one arrives, so the whole
+    // block genuinely is stale — but only a few times a second.
+    this.layer.invalidate();
   }
   update(dt) {
     super.update(dt);
@@ -580,7 +812,7 @@ class TerminalPanel extends Panel {
     this.acc += rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
-  drawContent(r) {
+  drawStatic(r) {
     const fs = this.fontSize;
     ctx.font = fontMono(fs);
     const lh = lineHeight(fs);
@@ -598,9 +830,13 @@ class TerminalPanel extends Panel {
       ctx.fillStyle = fade(kindColor(line.k), 1 - age * 0.55);
       textL(text, r.x, y, lh);
     }
+  }
+  drawLive(r) {
+    // Blinks twice a second; caching it would mean repainting every line
+    // on this panel twice a second for one small rectangle.
     if (this.mode !== 1 && (Date.now() % 1000) < 500) {
       ctx.fillStyle = this.accent.css;
-      ctx.fillRect(r.x, r.y + r.h - 3, cw, 2.5);
+      ctx.fillRect(r.x, r.y + r.h - 3, charW(this.fontSize), 2.5);
     }
   }
 }
@@ -629,13 +865,14 @@ class HexPanel extends Panel {
     this.rows.push({ t: "0x" + off + "  " + hex + " " + ascii, hl: rndInt(100) < 6 });
     if (this.rows.length > 60) this.rows.splice(0, this.rows.length - 60);
     this.offset += 8;
+    this.layer.invalidate();
   }
   update(dt) {
     super.update(dt);
     this.acc += this.rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
-  drawContent(r) {
+  drawStatic(r) {
     ctx.font = fontMono(10);
     const lh = lineHeight(10);
     const visible = Math.max(1, (r.h / lh) | 0);
@@ -676,14 +913,17 @@ class BinaryPanel extends Panel {
     }
     this.rows.push({ b: s, hs: hs, hl: hl });
     if (this.rows.length > 40) this.rows.splice(0, this.rows.length - 40);
+    this.layer.invalidate();
   }
   update(dt) {
     super.update(dt);
     this.acc += this.rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
-  drawContent(r) {
+  drawStatic(r) {
     const cw = charW(10);
+    // Column count feeds emit() too. It depends only on the panel width,
+    // which cannot change without a resize, and a resize invalidates.
     this.cols = Math.max(16, (r.w / cw) | 0);
     ctx.font = fontMono(10);
     const lh = lineHeight(10) * 0.9;
@@ -759,6 +999,9 @@ class GraphPanel extends Panel {
         s.sampleAcc -= SAMPLE_INTERVAL;
         s.history[s.head] = display;
         s.head = (s.head + 1) % HISTORY_LEN;
+        // The plotted line and its readout both come from the history
+        // buffer, so they change ten times a second, not sixty.
+        this.layer.invalidate();
       }
     }
     for (let i = 0; i < this.counters.length; i++) {
@@ -773,12 +1016,19 @@ class GraphPanel extends Panel {
       c.value += (c.target - c.value) * Math.min(1, dt * 2.2);
     }
   }
-  drawContent(r) {
+  // Counters pursue their targets continuously, so their digits can
+  // change on any frame — they are drawn live over the cached charts.
+  drawLive(r) {
+    if (this.counters.length > 0) {
+      const cw = Math.min(130, r.w * 0.26);
+      this.drawCounters({ x: r.x + r.w - cw, y: r.y, w: cw, h: r.h });
+    }
+  }
+  drawStatic(r) {
     let chart = r;
     if (this.counters.length > 0) {
       const cw = Math.min(130, r.w * 0.26);
       chart = { x: r.x, y: r.y, w: r.w - cw - 10, h: r.h };
-      this.drawCounters({ x: chart.x + chart.w + 10, y: r.y, w: cw, h: r.h });
     }
     if (this.horizontal) {
       const slotW = chart.w / this.series.length;
@@ -803,7 +1053,7 @@ class GraphPanel extends Panel {
       textR(arrow, r.x, r.w - 2, y + 1, 10);
       ctx.font = fontMonoBold(14);
       ctx.fillStyle = T.White.css;
-      textL(n0(Math.trunc(c.value)), r.x, y + 11, cellH - 12);
+      textL(uiInt(Math.trunc(c.value)), r.x, y + 11, cellH - 12);
     }
   }
   drawSeries(s, r) {
@@ -817,12 +1067,12 @@ class GraphPanel extends Panel {
     const cur = s.history[(s.head + HISTORY_LEN - 1) % HISTORY_LEN];
     let valueText;
     switch (s.unit) {
-      case "%":    valueText = fixC(cur * 100, 1) + "%"; break;
-      case "ms":   valueText = fixC(cur * 240 + 4, 1) + " ms"; break;
-      case "dB":   valueText = fixC(-20 - (1 - cur) * 60, 1) + " dB"; break;
-      case "Gb/s": valueText = fixC(cur * 38, 2) + " Gb/s"; break;
-      case "k/s":  valueText = Math.round(cur * 840) + " k/s"; break;
-      default:     valueText = String(Math.round(cur * 4200));
+      case "%":    valueText = uiFix(cur * 100, 1) + "%"; break;
+      case "ms":   valueText = uiFix(cur * 240 + 4, 1) + " ms"; break;
+      case "dB":   valueText = uiFix(-20 - (1 - cur) * 60, 1) + " dB"; break;
+      case "Gb/s": valueText = uiFix(cur * 38, 2) + " Gb/s"; break;
+      case "k/s":  valueText = uiInt(cur * 840) + " k/s"; break;
+      default:     valueText = uiInt(cur * 4200);
     }
     ctx.fillStyle = T.White.css;
     textR(valueText, r.x, r.w, r.y, labelH);
@@ -947,7 +1197,9 @@ class ProgressPanel extends Panel {
       }
     }
   }
-  drawContent(r) {
+  // Bars advance every frame, so this panel draws live over its cached
+  // frame. It is cheap: six short strings and a dozen rectangles.
+  drawLive(r) {
     let rowH = 30;
     const slots = Math.max(1, (r.h / rowH) | 0);
     rowH = r.h / slots;
@@ -1062,7 +1314,9 @@ class CompanyPanel extends Panel {
         break;
     }
   }
-  drawContent(r) {
+  // Logo alpha, step progress and the breach blink all move every frame,
+  // so nothing here is worth caching; the panel frame behind it still is.
+  drawLive(r) {
     const company = this.current;
     const t = this.phaseTime;
     const alpha = this.phase === PH_INTRO ? clamp(t / INTRO_DUR, 0, 1)
@@ -1228,25 +1482,37 @@ class CodePanel extends Panel {
   finishLine() {
     this.done.push(this.current);
     if (this.done.length > 70) this.done.splice(0, this.done.length - 70);
+    this.layer.invalidate();
     this.current = this.generateLine();
     const roll = rndInt(100);
     this.pauseLeft = roll < 6 ? 1.0 + rnd() * 1.8        // stares at the screen
                    : roll < 40 ? 0.08 + rnd() * 0.30     // normal line break
                    : 0;                                  // in the zone
   }
-  drawContent(r) {
+  /** The finished backlog. Fifty-odd syntax-coloured lines, each several
+   *  fillText calls — and it only moves when a line is completed, roughly
+   *  twice a second. Redrawing all of it for every typed character was by
+   *  a wide margin the most expensive thing this wallpaper did. */
+  drawStatic(r) {
     ctx.font = fontMono(12.5);
     const lh = lineHeight(12.5), cw = charW(12.5);
     let y = r.y + r.h - lh;
-    const cursorX = this.drawLine(this.current, r, y, cw, lh, this.typed);
-    if (this.pauseLeft <= 0 || (Date.now() % 1000) < 500) {
-      ctx.fillStyle = fade(T.Green, 0.85);
-      ctx.fillRect(cursorX + 1, y + lh * 0.15, cw * 0.8, lh * 0.75);
-    }
     for (let i = this.done.length - 1; i >= 0; i--) {
       y -= lh;
       if (y < r.y - lh) break;
       this.drawLine(this.done[i], r, y, cw, lh, 1e9);
+    }
+  }
+  /** The line being typed grows by a character or two per frame, so it
+   *  and its cursor are drawn live over the cached backlog. */
+  drawLive(r) {
+    ctx.font = fontMono(12.5);
+    const lh = lineHeight(12.5), cw = charW(12.5);
+    const y = r.y + r.h - lh;
+    const cursorX = this.drawLine(this.current, r, y, cw, lh, this.typed);
+    if (this.pauseLeft <= 0 || (Date.now() % 1000) < 500) {
+      ctx.fillStyle = fade(T.Green, 0.85);
+      ctx.fillRect(cursorX + 1, y + lh * 0.15, cw * 0.8, lh * 0.75);
     }
   }
   drawLine(line, r, y, cw, lh, maxChars) {
@@ -1539,12 +1805,14 @@ class ShellPanel extends Panel {
   push(text, color, promptLen) {
     this.lines.push({ t: text, c: color, p: promptLen });
     if (this.lines.length > 90) this.lines.splice(0, this.lines.length - 90);
+    this.layer.invalidate();
   }
   apply(e) {
     // Replace only makes sense on an output line, never the prompt line.
     if (e.r && this.lines.length > 0 && this.lines[this.lines.length - 1].p === 0) {
       const last = this.lines[this.lines.length - 1];
       last.t = e.t; last.c = e.c; last.p = 0;
+      this.layer.invalidate();          // in-place rewrite, same line count
     } else {
       this.push(e.t, e.c, 0);
     }
@@ -1604,14 +1872,34 @@ class ShellPanel extends Panel {
     this.cps = 14 + rnd() * 16;
     this.state = SH_TYPING;
   }
-  drawContent(r) {
+  /** Scrollback. Changes only when a line is pushed or an in-place
+   *  progress line rewrites itself — never per frame, even mid-download. */
+  drawStatic(r) {
     ctx.font = fontMono(11);
     const lh = lineHeight(11), cw = charW(11);
     const maxChars = Math.max(8, (r.w / cw) | 0);
-    const bottom = r.y + r.h;
-
-    // Bottom row: the active prompt/typing line (or a cursor while running).
-    let y = bottom - lh;
+    let y = r.y + r.h - lh * 2;          // the bottom row is the live one
+    for (let i = this.lines.length - 1; i >= 0; i--, y -= lh) {
+      if (y < r.y - lh) break;
+      const line = this.lines[i];
+      const text = line.t.length > maxChars ? line.t.slice(0, maxChars) : line.t;
+      if (line.p > 0 && line.p <= text.length) {
+        ctx.fillStyle = T.Green.css;
+        textL(text.slice(0, line.p), r.x, y, lh);
+        ctx.fillStyle = T.White.css;
+        textL(text.slice(line.p), r.x + line.p * cw, y, lh);
+      } else {
+        ctx.fillStyle = shellColor(line.c);
+        textL(text, r.x, y, lh);
+      }
+    }
+  }
+  /** Bottom row: the active prompt/typing line (or a bare cursor while a
+   *  command runs). It gains characters and blinks, so it stays live. */
+  drawLive(r) {
+    ctx.font = fontMono(11);
+    const lh = lineHeight(11), cw = charW(11);
+    const y = r.y + r.h - lh;
     if (this.state === SH_TYPING || this.state === SH_PAUSE) {
       const typed = this.state === SH_TYPING ? this.typing.slice(0, this.typedChars) : "";
       ctx.fillStyle = T.Green.css;
@@ -1625,22 +1913,6 @@ class ShellPanel extends Panel {
       drawShellCursor(x, y, cw, lh);
     } else {
       drawShellCursor(r.x, y, cw, lh);
-    }
-
-    for (let i = this.lines.length - 1; i >= 0; i--) {
-      y -= lh;
-      if (y < r.y - lh) break;
-      const line = this.lines[i];
-      const text = line.t.length > maxChars ? line.t.slice(0, maxChars) : line.t;
-      if (line.p > 0 && line.p <= text.length) {
-        ctx.fillStyle = T.Green.css;
-        textL(text.slice(0, line.p), r.x, y, lh);
-        ctx.fillStyle = T.White.css;
-        textL(text.slice(line.p), r.x + line.p * cw, y, lh);
-      } else {
-        ctx.fillStyle = shellColor(line.c);
-        textL(text, r.x, y, lh);
-      }
     }
   }
 }
@@ -1807,9 +2079,9 @@ class AptInstallCommand {
     L(o, 0.15, "The following NEW packages will be installed:");
     L(o, 0.02, "  " + this.pkg);
     L(o, 0.1, "0 upgraded, 1 newly installed, 0 to remove and " + rndInt(3, 40) + " not upgraded.");
-    L(o, 0.02, "Need to get " + n0(kb) + " kB of archives.");
-    L(o, 0.02, "After this operation, " + n0(Math.trunc(kb * 3.2)) + " kB of additional disk space will be used.");
-    L(o, 0.3 + rnd() * 0.6, "Get:1 http://deb.mesh.internal/stable main amd64 " + this.pkg + " amd64 " + this.version + " [" + n0(kb) + " kB]");
+    L(o, 0.02, "Need to get " + n0i(kb) + " kB of archives.");
+    L(o, 0.02, "After this operation, " + n0i(Math.trunc(kb * 3.2)) + " kB of additional disk space will be used.");
+    L(o, 0.3 + rnd() * 0.6, "Get:1 http://deb.mesh.internal/stable main amd64 " + this.pkg + " amd64 " + this.version + " [" + n0i(kb) + " kB]");
     L(o, 0.4 + rnd() * 0.8, "Fetched " + n0i(kb) + " kB in " + (1 + rnd() * 3).toFixed(0) + "s (" + n0i(kb / (1.2 + rnd() * 2)) + " kB/s)");
     L(o, 0.3, "Selecting previously unselected package " + this.pkg + ".");
     L(o, 0.2, "(Reading database ... " + (60000 + rndInt(60000)) + " files and directories currently installed.)");
@@ -2022,7 +2294,7 @@ class SynctlCommand {
     const secs = 1 + rnd() * 4;
     L(o, 0.2, "[sync] connecting to quorum @ " + ip + ":7433 ...");
     R(o, 0.4 + rnd() * 0.8, "[sync] connecting to quorum @ " + ip + ":7433 ... ok");
-    L(o, 0.15, "[sync] shard " + pad0(this.shard, 2) + ": " + n0(objects) + " objects, " + n0(stale) + " stale (" + this.mode + ")");
+    L(o, 0.15, "[sync] shard " + pad0(this.shard, 2) + ": " + n0i(objects) + " objects, " + n0i(stale) + " stale (" + this.mode + ")");
     const steps = 6 + rndInt(5);
     L(o, 0.1, "[sync] sealing " + bar(0, 22) + "   0%", SC_DIM);
     for (let i = 1; i <= steps; i++) {
@@ -2192,12 +2464,12 @@ class TopCommand {
     L(o, 0.02, "    PID USER      PR  NI    VIRT    RES  %CPU  %MEM     TIME+ COMMAND", SC_WHITE);
     const shown = 4 + rndInt(3);
     for (let i = 0; i < shown; i++) {
-      // NOTE: %MEM reproduces the C# custom format "0.1" verbatim — it
-      // rounds to a whole number then appends a literal ".1". Kept as-is so
-      // the two builds render identically.
+      // %MEM used to inherit a C# custom-format bug from the MAUI build —
+      // "0.1" rounded the value to a whole number and appended a literal
+      // ".1", so every process on the list ended in .1. Real percentage now.
       L(o, 0.02, padL(rndInt(300, 9999), 7) + " root      20   0 " + padL(rndInt(80000, 4000000), 7) +
         " " + padL(rndInt(10000, 900000), 6) + " " + padL((rnd() * 90).toFixed(1), 5) +
-        " " + padL(Math.round(rnd() * 8) + ".1", 5) + " " + rndInt(0, 900) + ":" +
+        " " + padL((rnd() * 8).toFixed(1), 5) + " " + rndInt(0, 900) + ":" +
         pad0(rndInt(0, 60), 2) + "." + pad0(rndInt(0, 99), 2) + " " + pick(SD.Units));
     }
     return o;
@@ -2244,6 +2516,12 @@ class PanelManager {
                    this.shell, this.graphs, this.progress, this.binary];
   }
   update(dt) { for (let i = 0; i < this.panels.length; i++) this.panels[i].update(dt); }
+  /** A Layer notices its own geometry changing, but a resize can also
+   *  change DPR and re-measure every font while a panel keeps its pixel
+   *  size, so drop every cache explicitly rather than reason about it. */
+  invalidateAll() {
+    for (let i = 0; i < this.panels.length; i++) this.panels[i].layer.invalidate();
+  }
   layout(width, height) {
     const gap = 6, margin = 8;
     const w = width - margin * 2, h = height - margin * 2;
@@ -2308,6 +2586,7 @@ class Dashboard {
   }
   resized() {
     this.panels.layout(VW, VH);
+    this.panels.invalidateAll();
     this.bg.invalidate();
 
     // Scanlines as a 4px-tall repeating pattern: one fillRect per frame

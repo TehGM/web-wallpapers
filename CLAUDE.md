@@ -149,6 +149,25 @@ is the only way in. Hooks: `__neon` (neonscape, module), `__hacker` (hacker,
 classic script — `step(dt)` is synchronous and bypasses the fps cap),
 `BlackHole` console API (blackhole).
 
+**A/B the optimisation against the thing it replaced.** Where a wallpaper caches
+drawing into an offscreen canvas, render one frozen frame both ways (stub the
+cache to draw live) and diff the pixels — that catches a stale cache, a
+misaligned blit and an antialiasing change in one test, and none of the three is
+reliably visible by eye. Freeze `Date.now` first or blinking cursors differ
+between the two draws. Two traps found this way in `hacker/`:
+
+- **Canvas text antialiasing depends on whether the canvas is opaque.** An
+  `alpha:false` canvas gets LCD subpixel AA; a transparent offscreen one gets
+  grayscale. Mixing them makes text visibly change character as it moves in and
+  out of a cache. Match them deliberately.
+- **Align an offscreen cache to whole device pixels** and blit it at an integer
+  device offset, or the blit resamples and softens every glyph.
+
+**Attribute cost by removing the thing, not by reading a profile column.**
+Per-function timings mis-attribute GPU-queued work: `hacker/`'s panel-frame
+drawing profiled at 0.06 ms/frame and actually cost 0.62 ms, so a "cheap"
+component was nearly removed. Ablate and re-measure the whole frame.
+
 To test against a live embedded host, Wallpaper Engine's `config.json` sets
 `--remote-debugging-port=8887 --remote-allow-origins=*`, so the running wallpaper
 is drivable over CDP at `http://127.0.0.1:8887/json/list` (Node 24 has a global

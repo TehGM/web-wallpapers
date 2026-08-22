@@ -18,6 +18,10 @@ Open [index.html](index.html) in a browser, or point Wallpaper Engine / Lively
 Wallpaper at it as a web wallpaper. It is a single classic-script page with
 no dependencies, so it works fully offline and straight off disk.
 
+Three names, deliberately: the folder is `hacker/`, the Wallpaper Engine
+title in [project.json](project.json) is **SYNAPSE//9**, and the page's own
+`<title>` is the in-fiction `SYNAPSE//9 NODE CONSOLE`.
+
 **Status: work in progress, not released** — not in the gallery yet, and no
 save-compatibility obligations (see the table in the root `CLAUDE.md`).
 
@@ -110,9 +114,96 @@ Inside Wallpaper Engine, the app's own FPS limit takes over the cap when it
 is lower than 60 (pushed through `wallpaperPropertyListener`); in a browser
 nothing ever reports a limit and the cap is simply 60.
 
+**Measured**, minimum of ten 300-frame batches on a real GPU:
+
+| | 1920x1080 | 3840x2160 |
+| --- | --- | --- |
+| Before panel caching | 1.48 ms/frame | 3.51 ms/frame |
+| Now | **0.23 ms/frame** | **0.76 ms/frame** |
+
+### Why it is cheap: the panel cache
+
+Almost nothing on these panels changes at the frame rate. A terminal emits a
+few lines a second, the hex dump eight rows, the code writer finishes a line
+about twice a second, the charts sample ten times a second. Redrawing thirty
+or forty `fillText` calls sixty times a second for output that is
+character-for-character identical to the last frame was over 80% of the total
+cost — `CodePanel` alone spent 0.77 ms per frame repainting its fifty-line
+backlog so that the bottom line could grow by one character.
+
+So each panel owns one offscreen bitmap (a `Layer`) holding its frame, its
+title bar and whatever part of its content is stable. It repaints only when
+the panel invalidates it — on a new line, a new sample, a finished line of
+code, or a step of the border glow (`fade()` quantises alpha to 1/64, so the
+glow only changes colour about five times a second). Everything that really
+does move every frame — the line being typed, the blinking cursors, the
+telemetry counters, the progress bars, the target-acquisition panel — is
+drawn live on top. In practice the layers repaint 4-14 times a second instead
+of 60.
+
+Panels therefore split their drawing in two: `drawStatic(rect)` goes into the
+cache, `drawLive(rect)` is painted over it every frame. A panel with no live
+content skips the clip and the live pass entirely.
+
+Three things this had to get right, all of which were verified by rendering
+the same frozen frame both ways and diffing the pixels:
+
+- **Device-pixel alignment.** The bitmap is aligned to whole device pixels and
+  blitted at an integer device offset, so glyphs land on exactly the subpixel
+  positions they would have landed on when drawn straight to the screen.
+  Getting this wrong resamples the blit and softens every character.
+- **Antialiasing has to match.** An opaque canvas gets LCD subpixel-antialiased
+  text; a transparent offscreen one gets grayscale. With the screen canvas
+  opaque the two disagreed on 11% of pixels — up to 143 code values on a
+  single channel — and text would have changed character the instant it moved
+  into a cache. The screen canvas is therefore created with `alpha: true`
+  even though its alpha channel is never used. Grayscale is also the better
+  choice for a wallpaper: subpixel AA bakes in one physical RGB-stripe layout,
+  and a host may scale and recomposite the page onto a panel that has none.
+- **Invalidating on resize.** A resize can change DPR and re-measure every
+  font while a panel keeps its pixel size, so every cache is dropped
+  explicitly rather than relying on geometry comparison.
+
+With those in place the cached output is pixel-identical to drawing live:
+across 2.07 M pixels no pixel differs by more than 2 code values (8-bit
+compositing round-off), at every resolution and DPR tested.
+
+### What was tried and rejected
+
+Caching the panel chrome in its own second bitmap, separate from the content,
+was **0.05 ms/frame faster but cost a whole extra screen of RAM** (32 MB at
+4K). Merging chrome and content into one layer per panel gives that memory
+back. Conversely, dropping the chrome cache altogether and merely reusing a
+`Path2D` for the frame was 4.5x *slower* (0.80 ms) — filling and stroking
+eight large translucent rounded rects every frame is genuinely expensive, and
+a first estimate that put it at 0.06 ms was simply wrong.
+
+Canvas memory now, backing stores only: 33 MB at 1080p, 129 MB at 4K. The
+caches are one screen of that; the largest single consumer is the background
+layer's baked composite, which is around two screens and is the obvious next
+thing to look at.
+
 There is no settings panel yet — customisation is planned. Knobs currently
 live as constants in the source: `FPS_MAX`, the fonts and rates in each
 panel class, `BG_ENTRIES`, `COMPANY_DATA`.
+
+## Numbers and locale
+
+Two number formats are on screen, deliberately different:
+
+- **Panel readouts** — the telemetry counters and chart values — follow the
+  viewer's locale, the way any desktop app's readouts would: `31,190` in
+  en-US, `31 190` in pl-PL, `31.190` in de-DE. Latin digits are forced and
+  the output is sanitised (U+00A0/U+202F group separators and U+2212 minus
+  become plain ASCII) so every glyph keeps the monospace advance the layout
+  is built on.
+- **Shell output** does not, and must not. A real terminal runs in the C
+  locale: `ls`, `df`, `apt`, `rsync` and the rest print `1,234` with a comma
+  and `0.5` with a point wherever in the world they run. Localising them
+  would be the one detail that gives the illusion away.
+
+The MAUI build had no such split — it ran under a pl-PL culture and leaked
+that locale into the fake shell output too.
 
 ## Testing hook
 
@@ -132,6 +223,27 @@ __hacker.dashboard() / .panels()
 
 The Claude Browser pane reports `document.hidden = true`, so rAF never fires
 there — drive it with `step()` and sample the canvas.
+
+`Layer` is a top-level class, so it is reachable too, which is how the cache
+is checked against the thing it replaced. Stubbing its `draw` makes every
+panel paint live; drawing the same frozen frame both ways and diffing the
+canvas is what proves the cache is not showing anything stale or misaligned:
+
+```js
+__hacker.stop();
+for (let i = 0; i < 1800; i++) __hacker.step(1/60);
+Date.now = () => 1700000000000;        // freeze, or cursors blink between draws
+const d = __hacker.dashboard(), x = document.getElementById('screen').getContext('2d');
+d.draw();                              // cached
+const A = x.getImageData(0, 0, innerWidth, innerHeight).data;
+const orig = Layer.prototype.draw;
+Layer.prototype.draw = (r, fn) => fn(r);
+d.draw();                              // live
+// ...diff against A, then restore Layer.prototype.draw = orig
+```
+
+Expect no pixel to differ by more than about 2. A large difference means a
+layer is not being invalidated when its content changes.
 
 ## Assets
 
