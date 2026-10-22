@@ -32,7 +32,12 @@ opens the settings window; **H** toggles it, **Esc** closes it, **L** opens
 the layout editor. It opens in
 the middle of the screen and its title bar drags it; a dragged window stays
 where it was put until the screen size changes. It is styled as one more
-window of the console.
+window of the console. It lays its sections out in as many columns as fit
+side by side on the screen, up to three — checked on opening, on a resize and
+when the settings-window size changes. Which column a section lands in is
+worked out from every section's unfolded height, so it depends only on the
+number of columns: folding a section never moves the others, and reopening
+puts everything back where it was.
 
 Every slider's value readout is also a text field: click it (or focus it and
 press Enter), type, and press Enter or click away; Esc cancels. Typed values

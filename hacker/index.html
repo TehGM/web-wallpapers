@@ -87,6 +87,11 @@
   .hk-sh::before{ content:"\25BE  "; }
   .hk-sec.closed .hk-sh::before{ content:"\25B8  "; }
   .hk-sec.closed .hk-rows{ display:none; }
+  /* multi-column settings window: one element per column, sections dealt
+     into them by the window (see layoutColumns) */
+  .hk-body.cols{ display:flex; align-items:flex-start; }
+  .hk-col{ flex:1 1 0; min-width:0; }
+  .hk-col + .hk-col{ margin-left:8px; padding-left:8px; border-left:1px solid var(--hk-line); }
   .hk-row{ margin:6px 0; }
   .hk-row.dis{ opacity:.4; }
   .hk-lab{ display:flex; justify-content:space-between; gap:8px; color:var(--hk-l); margin-bottom:1px; }
@@ -4601,7 +4606,8 @@ const Settings = (function () {
       }
     });
 
-    form = Form.build(el("div", "hk-body", win), SETTINGS_SCHEMA, {
+    body = el("div", "hk-body", win);
+    form = Form.build(body, SETTINGS_SCHEMA, {
       get: function (path) { return getPath(S, path); },
       set: commit,
       status: status,
@@ -4618,7 +4624,7 @@ const Settings = (function () {
     // to the middle instead
     window.addEventListener("resize", function () {
       dragged = false;
-      if (isOpen) center();
+      if (isOpen) { layoutColumns(); center(); }
     });
   }
 
@@ -4632,7 +4638,71 @@ const Settings = (function () {
     win.style.top = Math.max(0, Math.round((window.innerHeight - h) / 2)) + "px";
   }
   /** After the window changed size: centred again, unless it was dragged. */
-  function fit() { if (win && isOpen && !dragged) center(); }
+  function fit() {
+    if (!win || !isOpen) return;
+    layoutColumns();
+    if (!dragged) center(); else fitWindows();
+  }
+
+  /* As many columns as fit side by side on the screen, up to three, so the
+     settings spread out rather than stacking into one long column. Decided
+     on opening, on a resize and when the window scale changes.
+
+     Sections are dealt into explicit column elements rather than CSS
+     columns, which rebalance on every height change: folding a section
+     would pull its neighbours across from the next column. The split is
+     worked out from every section's unfolded height, so it depends only on
+     the column count — folding never moves anything, and reopening puts
+     every section back where it was. */
+  const COL_W = 300, MAX_COLS = 3;
+  let body = null, secs = null;
+  /** Cut `h` into `n` runs, in order, so the tallest run is as short as
+   *  possible. A dozen sections into three columns is a few dozen tries. */
+  function bestSplit(h, n) {
+    let best = null, bestMax = Infinity;
+    (function go(start, left, runs) {
+      if (left === 1) {
+        let sum = 0, mx = 0;
+        for (let i = start; i < h.length; i++) sum += h[i];
+        const all = runs.concat([[start, h.length]]);
+        for (let i = 0; i < all.length; i++) {
+          let t = 0;
+          for (let j = all[i][0]; j < all[i][1]; j++) t += h[j];
+          if (t > mx) mx = t;
+        }
+        if (mx < bestMax) { bestMax = mx; best = all; }
+        return;
+      }
+      for (let end = start + 1; end <= h.length - (left - 1); end++)
+        go(end, left - 1, runs.concat([[start, end]]));
+    })(0, Math.min(n, h.length), []);
+    return best;
+  }
+  function layoutColumns() {
+    if (!secs) secs = Array.prototype.filter.call(body.children, function (e) { return e.classList.contains("hk-sec"); });
+    const fit = Math.floor((window.innerWidth - 16) / (COL_W * S.look.ui));
+    const n = clamp(fit, 1, MAX_COLS);
+    // one column at the single-column width, every section unfolded, to
+    // measure; then the folds go back exactly as they were
+    body.classList.remove("cols");
+    win.style.width = "";
+    body.textContent = "";
+    secs.forEach(function (sec) { body.appendChild(sec); });
+    if (n === 1) return;
+    const folded = secs.map(function (sec) { return sec.classList.contains("closed"); });
+    secs.forEach(function (sec) { sec.classList.remove("closed"); });
+    const h = secs.map(function (sec) { return sec.offsetHeight; });
+    secs.forEach(function (sec, i) { sec.classList.toggle("closed", folded[i]); });
+    body.textContent = "";
+    body.classList.add("cols");
+    bestSplit(h, n).forEach(function (run) {
+      const col = el("div", "hk-col", body);
+      for (let i = run[0]; i < run[1]; i++) col.appendChild(secs[i]);
+    });
+    // each column keeps the single-column window's width
+    win.style.width = "calc(var(--hk-u) * " + (n * COL_W) + "px)";
+  }
+
 
   /* The title bar drags the window, like every other window. Its position
      is per session — it is not a setting. */
@@ -4682,6 +4752,7 @@ const Settings = (function () {
     cfgBtn.classList.add("on");
     refresh();
     PanelGears.show();
+    layoutColumns();
     if (!dragged) center();
     startMeter();
   }
