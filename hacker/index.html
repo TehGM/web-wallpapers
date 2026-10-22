@@ -18,12 +18,19 @@
     --hk-gr:#5E7A70; --hk-l:#9FC8B0; --hk-r:#FF3B4A;
     --hk-line:rgba(60,255,122,.18);
     --hk-mono:"Consolas","Cascadia Mono","DejaVu Sans Mono","Courier New",monospace;
+    /* title-bar scale: the global text size, set by APPLY.look. Everything
+       that sits in a panel's title bar is sized from it. */
+    --hk-k:1;
+    /* settings-window scale, set by APPLY.uiScale */
+    --hk-u:1;
+    --hk-tb:calc(18px * var(--hk-k));
   }
   /* Sits in the title bar of whichever panel holds the top-right corner,
-     left of its status dot: top = layout margin, height = TITLE_BAR_H. */
+     left of its status dot: top = layout margin, height = the title bar's. */
   .hk-cfg{
-    position:fixed; top:8px; right:24px; z-index:10; height:18px; padding:0 8px;
-    font:700 12px/18px var(--hk-mono); color:var(--hk-gr); cursor:pointer;
+    position:fixed; top:8px; right:calc(8px + 16px * var(--hk-k)); z-index:10;
+    height:var(--hk-tb); padding:0 calc(8px * var(--hk-k));
+    font:700 calc(12px * var(--hk-k))/var(--hk-tb) var(--hk-mono); color:var(--hk-gr); cursor:pointer;
     user-select:none; opacity:.7; transition:opacity .2s, color .2s;
   }
   .hk-cfg:hover, .hk-cfg:focus-visible, .hk-cfg.on{ opacity:1; color:var(--hk-g); outline:none; }
@@ -34,7 +41,7 @@
 
   /* placed by script: centred when opened, wherever it was dragged after */
   .hk-win{
-    position:fixed; left:0; top:0; z-index:20; width:300px;
+    position:fixed; left:0; top:0; z-index:20; width:calc(300px * var(--hk-u));
     max-height:calc(100vh - 32px); box-sizing:border-box;
     display:flex; flex-direction:column;
     background:rgba(7,13,16,.95); border:1px solid rgba(60,255,122,.9); border-radius:4px;
@@ -118,9 +125,10 @@
   .hk-opts{
     position:fixed; z-index:40; padding:2px; max-height:40vh; overflow-y:auto;
     background:#070D10; border:1px solid rgba(60,255,122,.6);
-    box-shadow:0 8px 24px rgba(0,0,0,.6); color:var(--hk-w); font:11px/1.35 var(--hk-mono);
+    box-shadow:0 8px 24px rgba(0,0,0,.6); color:var(--hk-w);
+    font:calc(11px * var(--hk-u))/1.35 var(--hk-mono);
   }
-  .hk-opt{ padding:3px 8px; cursor:pointer; white-space:nowrap; }
+  .hk-opt{ padding:calc(3px * var(--hk-u)) calc(8px * var(--hk-u)); cursor:pointer; white-space:nowrap; }
   .hk-opt:hover{ background:rgba(60,255,122,.14); }
   .hk-opt.sel{ color:var(--hk-g); }
   .hk-opt.sel::before{ content:"> "; }
@@ -150,15 +158,15 @@
   }
   .hk-lp-c small{ font-weight:400; color:var(--hk-l); }
   .hk-lp-x{
-    position:absolute; top:0; right:0; width:24px; height:18px; border-radius:0 4px 0 4px;
-    background:rgba(255,59,74,.55); color:var(--hk-w); cursor:pointer;
-    font:700 11px/18px var(--hk-mono); text-align:center;
+    position:absolute; top:0; right:0; width:calc(24px * var(--hk-k)); height:var(--hk-tb);
+    border-radius:0 4px 0 4px; background:rgba(255,59,74,.55); color:var(--hk-w); cursor:pointer;
+    font:700 calc(11px * var(--hk-k))/var(--hk-tb) var(--hk-mono); text-align:center;
   }
   .hk-lp-x:hover{ background:var(--hk-r); }
   .hk-lp-g{
-    position:absolute; top:0; right:24px; width:24px; height:18px;
+    position:absolute; top:0; right:calc(24px * var(--hk-k)); width:calc(24px * var(--hk-k)); height:var(--hk-tb);
     background:rgba(43,232,244,.35); color:var(--hk-w); cursor:pointer;
-    font:700 12px/18px var(--hk-mono); text-align:center;
+    font:700 calc(12px * var(--hk-k))/var(--hk-tb) var(--hk-mono); text-align:center;
   }
   .hk-lp-g:hover{ background:var(--hk-c); color:#04080A; }
   .hk-lp.sel{ border:2px solid var(--hk-c); background:rgba(43,232,244,.14); }
@@ -167,9 +175,9 @@
      layer, below every window */
   .hk-gears{ position:fixed; inset:0; z-index:11; pointer-events:none; }
   .hk-pg{
-    position:absolute; width:24px; height:18px; pointer-events:auto; cursor:pointer;
+    position:absolute; width:calc(24px * var(--hk-k)); height:var(--hk-tb); pointer-events:auto; cursor:pointer;
     border-radius:0 4px 0 4px; background:rgba(43,232,244,.35); color:var(--hk-w);
-    font:700 12px/18px var(--hk-mono); text-align:center; user-select:none;
+    font:700 calc(12px * var(--hk-k))/var(--hk-tb) var(--hk-mono); text-align:center; user-select:none;
   }
   .hk-pg:hover, .hk-pg:focus-visible{ background:var(--hk-c); color:#04080A; outline:none; }
   .hk-pg.sel{ background:var(--hk-c); color:#04080A; }
@@ -221,7 +229,11 @@
     align-items:center; justify-content:center; background:rgba(0,0,0,.55);
   }
   .hk-modal.show{ display:flex; }
-  .hk-modal .hk-win{ position:static; width:min(520px, calc(100vw - 32px)); max-height:none; }
+  .hk-modal .hk-win{ position:static; width:min(calc(520px * var(--hk-u)), calc(100vw - 32px)); max-height:none; }
+  /* Window scale. The contents are zoomed rather than the window itself:
+     the window keeps plain screen pixels for its position, so placing and
+     dragging it need no arithmetic, and only its width scales to match. */
+  .hk-win > *{ zoom:var(--hk-u); }
   .hk-card{ padding:8px; }
   .hk-card p{ margin:0 0 8px; color:var(--hk-l); line-height:1.45; }
   .hk-card textarea{
@@ -629,6 +641,9 @@ const DEFAULTS = {
   anim: { speed: 1 },
   perf: { fpsCap: 60, fpsOverride: false, dprCap: 2 },
   ui:   { button: "dim" },
+  // multiplies every panel's own text size
+  // ui scales every settings window, and nothing else
+  look: { text: 1, ui: 1 },
   // null: the default layout (re-jittered every load). Once edited, the exact
   // tree as { root } — root null for an empty screen. See defaultLayout().
   layout: null
@@ -942,6 +957,7 @@ class Panel {
     this._pulse = rnd() * Math.PI * 2;
     // Per-panel settings (see configure): text scale, speed, title bar.
     this.ts = 1; this.speed = 1; this.showTitle = true;
+    this.tbk = 1; this.tb = TITLE_BAR_H;     // title-bar scale and height
     this._baseTitle = null; this._baseAccent = null;
     /* One cached bitmap per panel, holding the frame, the title bar and
        whatever part of the content is not changing this frame. Bound once:
@@ -965,7 +981,11 @@ class Panel {
    *  Runs once after construction and again on every change. */
   configure(c) {
     if (this._baseAccent === null) { this._baseAccent = this.accent; this._baseTitle = this.title; }
-    this.ts = c.text;
+    this.ts = c.text * S.look.text;
+    // the title bar follows the global text size only, so every bar on
+    // screen stays the same height
+    this.tbk = S.look.text;
+    this.tb = TITLE_BAR_H * this.tbk;
     this.speed = c.speed;
     this.showTitle = c.titleBar;
     this.accent = PANEL_ACCENTS[c.accent] || this._baseAccent;
@@ -989,13 +1009,13 @@ class Panel {
    *  what the chrome cost. They only change when the layout does. */
   syncPaths() {
     if (this._px === this.x && this._py === this.y &&
-        this._pw === this.w && this._ph === this.h) return;
-    this._px = this.x; this._py = this.y; this._pw = this.w; this._ph = this.h;
+        this._pw === this.w && this._ph === this.h && this._ptb === this.tb) return;
+    this._px = this.x; this._py = this.y; this._pw = this.w; this._ph = this.h; this._ptb = this.tb;
     this._framePath = roundRectPath(this.x, this.y, this.w, this.h, 4);
-    this._titlePath = roundRectPath(this.x, this.y, this.w, TITLE_BAR_H, 4);
+    this._titlePath = roundRectPath(this.x, this.y, this.w, this.tb, 4);
   }
   contentRect() {
-    const top = this.showTitle ? TITLE_BAR_H + PAD / 2 : PAD;
+    const top = this.showTitle ? this.tb + PAD / 2 : PAD;
     return {
       x: this.x + PAD, y: this.y + top,
       w: this.w - PAD * 2, h: this.h - top - PAD
@@ -1021,9 +1041,9 @@ class Panel {
     if (this.showTitle) {
       ctx.fillStyle = fade(this.accent, 0.10);
       ctx.fill(this._titlePath);
-      ctx.font = fontMonoBold(10);
+      ctx.font = fontMonoBold(10 * this.tbk);
       ctx.fillStyle = this.accent.css;
-      textL("┃ " + this.title, b.x + 6, b.y, TITLE_BAR_H);
+      textL("┃ " + this.title, b.x + 6 * this.tbk, b.y, this.tb);
     }
 
     const r = this.contentRect();
@@ -1059,7 +1079,8 @@ class Panel {
       const dotA = 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2));
       ctx.fillStyle = fade(this.accent, dotA);
       ctx.beginPath();
-      ctx.arc(b.x + b.w - 10, b.y + TITLE_BAR_H / 2, 2.5, 0, Math.PI * 2);
+      const k = this.tbk;
+      ctx.arc(b.x + b.w - 10 * k, b.y + this.tb / 2, 2.5 * k, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -3027,20 +3048,22 @@ const LAYOUT_GAP = 6, LAYOUT_MARGIN = 8;
 function jitter(base, amount) { return base + (rnd() * 2 - 1) * amount; }
 
 /** The arrangement the wallpaper ships with, its split fractions jittered
- *  so the geometry differs a little on every load. */
+ *  so the geometry differs a little on every load — and rounded, by
+ *  tidyTree, so a frozen copy does not carry 16-digit fractions into every
+ *  saved link. */
 function defaultLayout() {
   const leftW = jitter(0.22, 0.02), centerW = jitter(0.46, 0.02);
   const bottomH = jitter(0.18, 0.02);
   const leftSplit = jitter(0.58, 0.04), rightSplit = jitter(0.55, 0.04);
   const leaf = function (p, id) { return { p: p, id: id }; };
-  return { d: "v", f: [1 - bottomH, bottomH], c: [
+  return tidyTree({ d: "v", f: [1 - bottomH, bottomH], c: [
     { d: "h", f: [leftW, centerW, 1 - leftW - centerW], c: [
       { d: "v", f: [leftSplit, 1 - leftSplit], c: [leaf("trace", 1), leaf("hex", 2)] },
       leaf("code", 3),
       { d: "v", f: [rightSplit, 1 - rightSplit], c: [leaf("target", 4), leaf("tty", 5)] }
     ]},
     { d: "h", f: [0.38, 0.36, 0.26], c: [leaf("telemetry", 6), leaf("pipeline", 7), leaf("stream", 8)] }
-  ]};
+  ]});
 }
 
 function cloneTree(n) { return n ? JSON.parse(JSON.stringify(n)) : null; }
@@ -3477,6 +3500,15 @@ const SETTINGS_SCHEMA = [
       tip: "Move, resize, add and remove panels over the live wallpaper, and change each panel's own settings (L).",
       run: function () { LayoutEditor.enter(); } }
   ]},
+  { id: "look", title: "APPEARANCE", apply: "look", rows: [
+    { kind: "range", label: "Text size", path: "look.text", min: 0.6, max: 2.5, step: 0.05, unit: U_PCT,
+      tip: "Size of the text on every panel, title bars included, on top of each panel's own " +
+           "text size. Larger text shows fewer lines, and costs less." },
+    { kind: "range", label: "Settings windows", path: "look.ui", min: 0.75, max: 2, step: 0.05, unit: U_PCT,
+      live: false, apply: "uiScale",
+      tip: "Size of the settings windows — this one, each panel's, and the layout editor's. " +
+           "The wallpaper itself is not affected. Applies when the slider is released." }
+  ]},
   { id: "fx", title: "CRT // OVERLAY", apply: "fx", rows: [
     { kind: "range", label: "Scanlines", path: "fx.scan", min: 0, max: 3, step: 0.05, unit: U_PCT,
       tip: "Darkness of the CRT scanline pattern. 100% is the original look." },
@@ -3573,7 +3605,9 @@ const PANEL_COMMON_ROWS = [
     tip: "Colour of the panel's frame, title and cursor." },
   { kind: "check", label: "Title bar", path: "titleBar", def: true },
   { kind: "range", label: "Text size", path: "text", def: 1, min: 0.6, max: 2.5, step: 0.05, unit: U_PCT,
-    tip: "Size of this panel's text. Larger text shows fewer lines, and costs less." },
+    tip: "Size of this panel's text, on top of the global text size in the main settings. " +
+         "Its title bar follows the global size only, so all title bars stay level. " +
+         "Larger text shows fewer lines, and costs less." },
   { kind: "range", label: "Speed", path: "speed", def: 1, min: 0, max: 3, step: 0.05, unit: U_SPEED,
     tip: "How fast this panel runs, on top of master speed. 0 freezes it." }
 ];
@@ -3675,6 +3709,17 @@ const APPLY = {
     if (dashboard && targetDpr() !== DPR) resize();
   },
   ui: function () { Settings.syncButton(); },
+  // every panel re-reads its settings, the global text size among them, and
+  // everything sitting in a title bar (CFG, the gears) is resized to match
+  look: function () {
+    document.documentElement.style.setProperty("--hk-k", String(S.look.text));
+    APPLY.layout();
+  },
+  uiScale: function () {
+    document.documentElement.style.setProperty("--hk-u", String(S.look.ui));
+    Settings.fit();
+    fitWindows();
+  },
   layout: function () {
     if (!dashboard) return;
     dashboard.applyLayout();
@@ -4111,6 +4156,8 @@ const Settings = (function () {
     win.style.left = Math.max(0, Math.round((window.innerWidth - w) / 2)) + "px";
     win.style.top = Math.max(0, Math.round((window.innerHeight - h) / 2)) + "px";
   }
+  /** After the window changed size: centred again, unless it was dragged. */
+  function fit() { if (win && isOpen && !dragged) center(); }
 
   /* The title bar drags the window, like every other window. Its position
      is per session — it is not a setting. */
@@ -4322,7 +4369,7 @@ const Settings = (function () {
   })();
 
   return {
-    open: open, close: close, toggle: toggle, escape: escape,
+    open: open, close: close, toggle: toggle, escape: escape, fit: fit,
     isOpen: function () { return isOpen; },
     refresh: refresh, syncButton: syncButton, status: status
   };
@@ -4331,6 +4378,21 @@ const Settings = (function () {
 /* ---------------------------------------------------------------------
    Panel settings window
    ------------------------------------------------------------------ */
+
+/** Pulls every open window back onto the screen after a size change. */
+function fitWindows() {
+  const wins = document.querySelectorAll("body > .hk-win");
+  for (let i = 0; i < wins.length; i++) {
+    const w = wins[i];
+    if (w.style.display === "none") continue;
+    const r = w.getBoundingClientRect();
+    const left = clamp(r.left, 0, Math.max(0, window.innerWidth - r.width));
+    const top = clamp(r.top, 0, Math.max(0, window.innerHeight - 40));
+    w.style.left = Math.round(left) + "px";
+    w.style.top = Math.round(top) + "px";
+    w.style.maxHeight = Math.round(window.innerHeight - top - 8) + "px";
+  }
+}
 
 /** Title-bar dragging for a window; `skip` is a control in the bar (its
  *  close button) that must stay clickable. */
@@ -4490,7 +4552,7 @@ const PanelGears = (function () {
     // the CFG button lives in the top-right title bar too; a gear that
     // would land on it moves to its left instead
     const cfg = document.getElementById("hk-cfg").getBoundingClientRect();
-    const W = 24, H = TITLE_BAR_H;
+    const W = 24 * S.look.text, H = TITLE_BAR_H * S.look.text;
     dashboard.panels.leaves.forEach(function (l) {
       const id = l.node.id, r = l.r;
       let x = r.x + r.w - W;

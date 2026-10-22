@@ -44,6 +44,8 @@ while the setting keeps the exact value.
 | Section | Settings |
 | --- | --- |
 | LAYOUT | **Layout & panels** (also **L**) — see Layout and Panel settings below. |
+| APPEARANCE | Text size — every panel's text, multiplying each panel's own text size (60–250%). Title bars scale with it, and so does everything sitting in them: the CFG button, the panel ⚙ buttons, the layout editor's ⚙ and ✕. |
+| | Settings windows — size of every settings window (this one, each panel's, the layout editor's, the scene-code box), 75–200%. Affects nothing else; applies when the slider is released. |
 | CRT // OVERLAY | Scanlines and their drift speed, refresh band and its speed, flicker, glitch-bar frequency, vignette. Strengths are relative to the original look (100%); 0 switches an effect off and skips its draw. |
 | ANIMATION | Master speed — scales everything that moves. 0 freezes the screen, and a frozen screen is not redrawn at all. |
 | PERFORMANCE | FPS cap (0 = uncapped), pixel-ratio cap, and **Override WE FPS limit** (see Performance). |
@@ -142,7 +144,7 @@ settings window takes it along. Every panel has:
 | Title | Blank keeps the panel's own title. |
 | Accent colour | Frame, title and cursor colour. |
 | Title bar | Off gives the content the whole panel. |
-| Text size | 60–250%. Larger text shows fewer lines, and costs less. |
+| Text size | 60–250%, multiplied by the global text size. Scales the content only — title bars follow the global size, so they all stay level. Larger text shows fewer lines, and costs less. |
 | Speed | On top of master speed; 0 freezes just this panel. |
 
 And by type:
