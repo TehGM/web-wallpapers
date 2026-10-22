@@ -96,6 +96,13 @@
   .hk-chk input:checked + .hk-box::before{ content:"[x]"; color:var(--hk-g); }
   .hk-chk input:focus-visible + .hk-box{ outline:1px solid var(--hk-g); }
   .hk-note{ margin:6px 0; color:var(--hk-gr); line-height:1.45; }
+  .hk-text{
+    display:block; width:100%; box-sizing:border-box; margin:0; padding:2px 6px;
+    border:1px solid rgba(60,255,122,.35); border-radius:0; background:rgba(60,255,122,.05);
+    color:var(--hk-w); font:inherit; outline:none;
+  }
+  .hk-text:focus{ border-color:var(--hk-g); }
+  .hk-text::placeholder{ color:var(--hk-gr); }
 
   /* Dropdown built from plain divs — see makeSelect(). */
   .hk-sel{
@@ -148,6 +155,24 @@
     font:700 11px/18px var(--hk-mono); text-align:center;
   }
   .hk-lp-x:hover{ background:var(--hk-r); }
+  .hk-lp-g{
+    position:absolute; top:0; right:24px; width:24px; height:18px;
+    background:rgba(43,232,244,.35); color:var(--hk-w); cursor:pointer;
+    font:700 12px/18px var(--hk-mono); text-align:center;
+  }
+  .hk-lp-g:hover{ background:var(--hk-c); color:#04080A; }
+  .hk-lp.sel{ border:2px solid var(--hk-c); background:rgba(43,232,244,.14); }
+  .hk-pset{ z-index:27; }
+  /* panel gears while the settings window is open: above the CFG button's
+     layer, below every window */
+  .hk-gears{ position:fixed; inset:0; z-index:11; pointer-events:none; }
+  .hk-pg{
+    position:absolute; width:24px; height:18px; pointer-events:auto; cursor:pointer;
+    border-radius:0 4px 0 4px; background:rgba(43,232,244,.35); color:var(--hk-w);
+    font:700 12px/18px var(--hk-mono); text-align:center; user-select:none;
+  }
+  .hk-pg:hover, .hk-pg:focus-visible{ background:var(--hk-c); color:#04080A; outline:none; }
+  .hk-pg.sel{ background:var(--hk-c); color:#04080A; }
   .hk-sp{ position:absolute; z-index:1; }
   .hk-sp.h{ cursor:col-resize; }
   .hk-sp.v{ cursor:row-resize; }
@@ -504,13 +529,16 @@ function kindColor(k) {
        : k === K_SUCCESS ? T.Green : k === K_INFO ? T.Cyan : T.DimGreen;
 }
 
-RD.systemLogLine = function () {
+/* `alert` scales how often errors and warnings come up; 1 is the default mix. */
+RD.systemLogLine = function (alert) {
+  const a = alert === undefined ? 1 : alert;
   const roll = rndInt(100);
   const time = hhmmss(new Date());
-  if (roll < 5)  return { t: "[" + time + "] !! " + pick(RD.Verbs) + " " + pick(RD.Objects) + " :: " + pick(RD.FailTags) + " 0x" + RD.hex(4), k: K_ERROR };
-  if (roll < 12) return { t: "[" + time + "] ~  " + pick(RD.Qualifiers) + " " + pick(RD.Objects) + " " + pick(RD.WarnTags) + " (" + rndInt(1, 400) + " ms)", k: K_WARN };
-  if (roll < 24) return { t: "[" + time + "] ++ " + pick(RD.Verbs) + " " + pick(RD.Objects) + " complete [" + pick(RD.OkTags) + "]", k: K_SUCCESS };
-  if (roll < 34) return { t: "[" + time + "] :: seg 0x" + RD.hex(8) + " -> 0x" + RD.hex(8) + " (" + RD.sizeToken() + ")", k: K_INFO };
+  const eT = 5 * a, wT = eT + 7 * a;
+  if (roll < eT) return { t: "[" + time + "] !! " + pick(RD.Verbs) + " " + pick(RD.Objects) + " :: " + pick(RD.FailTags) + " 0x" + RD.hex(4), k: K_ERROR };
+  if (roll < wT) return { t: "[" + time + "] ~  " + pick(RD.Qualifiers) + " " + pick(RD.Objects) + " " + pick(RD.WarnTags) + " (" + rndInt(1, 400) + " ms)", k: K_WARN };
+  if (roll < wT + 12) return { t: "[" + time + "] ++ " + pick(RD.Verbs) + " " + pick(RD.Objects) + " complete [" + pick(RD.OkTags) + "]", k: K_SUCCESS };
+  if (roll < wT + 22) return { t: "[" + time + "] :: seg 0x" + RD.hex(8) + " -> 0x" + RD.hex(8) + " (" + RD.sizeToken() + ")", k: K_INFO };
   switch (roll % 5) {
     case 0: return { t: "[" + time + "]    " + pick(RD.Verbs) + " " + pick(RD.Qualifiers) + " " + pick(RD.Objects) + " " + rndInt(1, 64) + "/" + rndInt(64, 128), k: K_NORMAL };
     case 1: return { t: "[" + time + "]    " + pick(RD.Verbs) + " " + pick(RD.Objects) + " @ " + RD.nodeId() + " .. " + rndInt(1, 100) + "%", k: K_NORMAL };
@@ -520,10 +548,12 @@ RD.systemLogLine = function () {
   }
 };
 
-RD.eventFeedLine = function () {
+RD.eventFeedLine = function (alert) {
+  const a = alert === undefined ? 1 : alert;
   const roll = rndInt(100);
-  if (roll < 6)  return { t: "▲ " + pick(RD.ErrorEvents), k: K_ERROR };
-  if (roll < 14) return { t: "● " + RD.nodeId() + " " + pick(RD.WarnTags).toLowerCase(), k: K_WARN };
+  const eT = 6 * a;
+  if (roll < eT) return { t: "▲ " + pick(RD.ErrorEvents), k: K_ERROR };
+  if (roll < eT + 8 * a) return { t: "● " + RD.nodeId() + " " + pick(RD.WarnTags).toLowerCase(), k: K_WARN };
   return { t: "▸ " + RD.nodeId() + " :: " + pick(RD.Verbs).toLowerCase() + " " + pick(RD.Objects), k: K_NORMAL };
 };
 
@@ -599,8 +629,8 @@ const DEFAULTS = {
   anim: { speed: 1 },
   perf: { fpsCap: 60, fpsOverride: false, dprCap: 2 },
   ui:   { button: "dim" },
-  // null: the stock layout (re-jittered every load). Once edited, the exact
-  // tree as { root } — root null for an empty screen. See stockLayout().
+  // null: the default layout (re-jittered every load). Once edited, the exact
+  // tree as { root } — root null for an empty screen. See defaultLayout().
   layout: null
 };
 function cloneState(o) { return JSON.parse(JSON.stringify(o)); }
@@ -910,6 +940,9 @@ class Panel {
     this.title = "";
     this.accent = T.Green;
     this._pulse = rnd() * Math.PI * 2;
+    // Per-panel settings (see configure): text scale, speed, title bar.
+    this.ts = 1; this.speed = 1; this.showTitle = true;
+    this._baseTitle = null; this._baseAccent = null;
     /* One cached bitmap per panel, holding the frame, the title bar and
        whatever part of the content is not changing this frame. Bound once:
        Layer takes a callback every frame, and binding per frame would
@@ -927,6 +960,20 @@ class Panel {
     this._framePath = null; this._titlePath = null;
     this._px = NaN; this._py = NaN; this._pw = NaN; this._ph = NaN;
   }
+  /** Applies this panel's settings — PANEL_COMMON_ROWS plus its type's own
+   *  rows, merged over their defaults. Subclasses extend it for theirs.
+   *  Runs once after construction and again on every change. */
+  configure(c) {
+    if (this._baseAccent === null) { this._baseAccent = this.accent; this._baseTitle = this.title; }
+    this.ts = c.text;
+    this.speed = c.speed;
+    this.showTitle = c.titleBar;
+    this.accent = PANEL_ACCENTS[c.accent] || this._baseAccent;
+    this.title = c.title || this.defaultTitle();
+    this._glowQ = -1;
+    this.layer.invalidate();
+  }
+  defaultTitle() { return this._baseTitle; }
   update(dt) {
     this._pulse += dt * 1.5;
     // fade() quantises alpha to 1/64, so the border glow only changes
@@ -948,7 +995,7 @@ class Panel {
     this._titlePath = roundRectPath(this.x, this.y, this.w, TITLE_BAR_H, 4);
   }
   contentRect() {
-    const top = this.title ? TITLE_BAR_H + PAD / 2 : PAD;
+    const top = this.showTitle ? TITLE_BAR_H + PAD / 2 : PAD;
     return {
       x: this.x + PAD, y: this.y + top,
       w: this.w - PAD * 2, h: this.h - top - PAD
@@ -971,7 +1018,7 @@ class Panel {
     ctx.strokeStyle = fade(this.accent, 0.9);
     ctx.stroke(this._framePath);
 
-    if (this.title) {
+    if (this.showTitle) {
       ctx.fillStyle = fade(this.accent, 0.10);
       ctx.fill(this._titlePath);
       ctx.font = fontMonoBold(10);
@@ -1008,7 +1055,7 @@ class Panel {
 
     // The title dot blinks about six times a second — too fast to be worth
     // a repaint of the panel, and one arc is cheaper than one anyway.
-    if (this.title) {
+    if (this.showTitle) {
       const dotA = 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2));
       ctx.fillStyle = fade(this.accent, dotA);
       ctx.beginPath();
@@ -1186,8 +1233,14 @@ class TerminalPanel extends Panel {
     this.acc += rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
+  configure(c) {
+    super.configure(c);
+    const a = c.alerts;
+    this.gen = c.feed === "events" ? function () { return RD.eventFeedLine(a); }
+                                   : function () { return RD.systemLogLine(a); };
+  }
   drawStatic(r) {
-    const fs = this.fontSize;
+    const fs = this.fontSize * this.ts;
     ctx.font = fontMono(fs);
     const lh = lineHeight(fs);
     const cw = charW(fs);
@@ -1210,7 +1263,7 @@ class TerminalPanel extends Panel {
     // on this panel twice a second for one small rectangle.
     if (this.mode !== 1 && (Date.now() % 1000) < 500) {
       ctx.fillStyle = this.accent.css;
-      ctx.fillRect(r.x, r.y + r.h - 3, charW(this.fontSize), 2.5);
+      ctx.fillRect(r.x, r.y + r.h - 3, charW(this.fontSize * this.ts), 2.5);
     }
   }
 }
@@ -1221,6 +1274,7 @@ class HexPanel extends Panel {
     super();
     this.title = "MEMORY INSPECTOR";
     this.accent = T.Cyan;
+    this.hlK = 1;                  // highlighted-row frequency, 1 = default
     this.rows = [];
     this.rate = 5 + rnd() * 6;
     this.offset = rndInt(1 << 20) * 16;
@@ -1236,7 +1290,7 @@ class HexPanel extends Panel {
     }
     let off = this.offset.toString(16).toUpperCase();
     if (off.length < 8) off = "0".repeat(8 - off.length) + off;
-    this.rows.push({ t: "0x" + off + "  " + hex + " " + ascii, hl: rndInt(100) < 6 });
+    this.rows.push({ t: "0x" + off + "  " + hex + " " + ascii, hl: rnd() * 100 < 6 * this.hlK });
     if (this.rows.length > 60) this.rows.splice(0, this.rows.length - 60);
     this.offset += 8;
     this.layer.invalidate();
@@ -1246,9 +1300,11 @@ class HexPanel extends Panel {
     this.acc += this.rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
+  configure(c) { super.configure(c); this.hlK = c.highlights; }
   drawStatic(r) {
-    ctx.font = fontMono(10);
-    const lh = lineHeight(10);
+    const fs = 10 * this.ts;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs);
     const visible = Math.max(1, (r.h / lh) | 0);
     const start = Math.max(0, this.rows.length - visible);
     let y = r.y + r.h - lh;
@@ -1272,6 +1328,7 @@ class BinaryPanel extends Panel {
     super();
     this.title = "RAW STREAM";
     this.accent = T.DimGreen;
+    this.hlK = 1;                  // highlighted-run frequency, 1 = default
     this.rows = [];
     this.rate = 8 + rnd() * 8;
     this.acc = 0;
@@ -1281,7 +1338,7 @@ class BinaryPanel extends Panel {
     let s = "";
     for (let i = 0; i < this.cols; i++) s += (rnd() < 0.5 ? "0" : "1");
     let hs = -1, hl = 0;
-    if (rndInt(100) < 18) {
+    if (rnd() * 100 < 18 * this.hlK) {
       hl = rndInt(4, 14);
       hs = rndInt(0, Math.max(1, this.cols - hl));
     }
@@ -1294,13 +1351,15 @@ class BinaryPanel extends Panel {
     this.acc += this.rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
+  configure(c) { super.configure(c); this.hlK = c.highlights; }
   drawStatic(r) {
-    const cw = charW(10);
+    const fs = 10 * this.ts;
+    const cw = charW(fs);
     // Column count feeds emit() too. It depends only on the panel width,
     // which cannot change without a resize, and a resize invalidates.
     this.cols = Math.max(16, (r.w / cw) | 0);
-    ctx.font = fontMono(10);
-    const lh = lineHeight(10) * 0.9;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs) * 0.9;
     const visible = Math.max(1, (r.h / lh) | 0);
     const start = Math.max(0, this.rows.length - visible);
     let y = r.y + r.h - lh;
@@ -1337,8 +1396,14 @@ class GraphPanel extends Panel {
     this.title = "TELEMETRY";
     this.accent = T.Blue;
     this.horizontal = !!horizontal;
-
-    this.counters = takeShuffled(RD.StatDefs, counters || 0).map(function (d) {
+    this.orient = "auto";
+    this.initData(count, counters || 0);
+  }
+  /** (Re)builds the charts and counters — on construction, and when the
+   *  settings ask for a different number of either. */
+  initData(count, counters) {
+    this._nSeries = count; this._nCounters = counters;
+    this.counters = takeShuffled(RD.StatDefs, counters).map(function (d) {
       const start = d[1] + rnd() * (d[2] - d[1]);
       return { label: d[0], min: d[1], max: d[2], value: start, target: start, retarget: rnd() * 2, trend: 0 };
     });
@@ -1354,6 +1419,17 @@ class GraphPanel extends Panel {
       s.history.fill(v);
       return s;
     });
+    this.layer.invalidate();
+  }
+  configure(c) {
+    super.configure(c);
+    if (c.charts !== this._nSeries || c.counters !== this._nCounters) this.initData(c.charts, c.counters);
+    this.orient = c.orient;
+    this.syncOrientation();
+  }
+  /** Side by side in a wide slot, stacked in a tall one — unless set. */
+  syncOrientation() {
+    this.horizontal = this.orient === "auto" ? this.w >= this.h * 1.4 : this.orient === "side";
   }
   update(dt) {
     super.update(dt);
@@ -1394,14 +1470,14 @@ class GraphPanel extends Panel {
   // change on any frame — they are drawn live over the cached charts.
   drawLive(r) {
     if (this.counters.length > 0) {
-      const cw = Math.min(130, r.w * 0.26);
+      const cw = Math.min(130 * this.ts, r.w * 0.26);
       this.drawCounters({ x: r.x + r.w - cw, y: r.y, w: cw, h: r.h });
     }
   }
   drawStatic(r) {
     let chart = r;
     if (this.counters.length > 0) {
-      const cw = Math.min(130, r.w * 0.26);
+      const cw = Math.min(130 * this.ts, r.w * 0.26);
       chart = { x: r.x, y: r.y, w: r.w - cw - 10, h: r.h };
     }
     if (this.horizontal) {
@@ -1419,22 +1495,23 @@ class GraphPanel extends Panel {
     for (let i = 0; i < this.counters.length; i++) {
       const c = this.counters[i];
       const y = r.y + i * cellH;
-      ctx.font = fontMono(8.5);
+      const ts = this.ts;
+      ctx.font = fontMono(8.5 * ts);
       ctx.fillStyle = T.Gray.css;
-      textL(c.label, r.x, y + 1, 10);
+      textL(c.label, r.x, y + 1, 10 * ts);
       const arrow = c.trend > 0 ? "▲" : c.trend < 0 ? "▼" : " ";
       ctx.fillStyle = (c.trend >= 0 ? T.Green : T.Orange).css;
-      textR(arrow, r.x, r.w - 2, y + 1, 10);
-      ctx.font = fontMonoBold(14);
+      textR(arrow, r.x, r.w - 2, y + 1, 10 * ts);
+      ctx.font = fontMonoBold(14 * ts);
       ctx.fillStyle = T.White.css;
-      textL(uiInt(Math.trunc(c.value)), r.x, y + 11, cellH - 12);
+      textL(uiInt(Math.trunc(c.value)), r.x, y + 11 * ts, cellH - 12 * ts);
     }
   }
   drawSeries(s, r) {
-    const labelH = 13;
+    const labelH = 13 * this.ts;
     const cx = r.x, cy = r.y + labelH, cw = r.w, ch = r.h - labelH;
 
-    ctx.font = fontMonoBold(9.5);
+    ctx.font = fontMonoBold(9.5 * this.ts);
     ctx.fillStyle = s.color.css;
     textL(s.label, r.x, r.y, labelH);
 
@@ -1501,6 +1578,7 @@ class ProgressPanel extends Panel {
     super();
     this.title = "TASK PIPELINE";
     this.accent = T.Green;
+    this.failK = 1; this.endlessK = 1;     // multiples of the default odds
     this.bars = [];
     for (let i = 0; i < 6; i++) this.bars.push(this.newBar());
   }
@@ -1510,13 +1588,19 @@ class ProgressPanel extends Panel {
       progress: rnd() * 0.2,
       speed: 0.04 + rnd() * 0.25,
       failAt: 2,
-      endless: rndInt(100) < 15,
+      endless: rnd() * 100 < 15 * this.endlessK,
       state: BAR_RUNNING,
       timer: 0,
       status: statusWordFor(0)
     };
-    if (!bar.endless && rndInt(100) < 25) bar.failAt = 0.3 + rnd() * 0.65;  // doomed
+    if (!bar.endless && rnd() * 100 < 25 * this.failK) bar.failAt = 0.3 + rnd() * 0.65;  // doomed
     return bar;
+  }
+  configure(c) {
+    super.configure(c);
+    this.failK = c.failures; this.endlessK = c.endless;
+    while (this.bars.length < c.bars) this.bars.push(this.newBar());
+    this.bars.length = c.bars;
   }
   update(dt) {
     super.update(dt);
@@ -1574,7 +1658,7 @@ class ProgressPanel extends Panel {
   // Bars advance every frame, so this panel draws live over its cached
   // frame. It is cheap: six short strings and a dozen rectangles.
   drawLive(r) {
-    let rowH = 30;
+    let rowH = 30 * this.ts;
     const slots = Math.max(1, (r.h / rowH) | 0);
     rowH = r.h / slots;
     const n = Math.min(slots, this.bars.length);
@@ -1587,14 +1671,15 @@ class ProgressPanel extends Panel {
                 : bar.state === BAR_COMPLETED ? T.Green
                 : bar.state === BAR_RESTARTING ? T.Orange : T.Green;
 
-    ctx.font = fontMono(10.5 * 0.85);
+    const ts = this.ts, labH = 12 * ts;
+    ctx.font = fontMono(10.5 * 0.85 * ts);
     ctx.fillStyle = T.Gray.css;
-    textL(bar.label, r.x, r.y, 12);
+    textL(bar.label, r.x, r.y, labH);
     ctx.fillStyle = color.css;
     const right = bar.state === BAR_RUNNING
       ? bar.status + " " + Math.round(bar.progress * 100) + "%"
       : bar.status;
-    textR(right, r.x, r.w, r.y, 12);
+    textR(right, r.x, r.w, r.y, labH);
 
     // Block-character bar, movie style: ██████░░░░░
     //
@@ -1603,11 +1688,11 @@ class ProgressPanel extends Panel {
     // so the shaded run would bleed over the label above it. The geometry
     // below is taken from the █ glyph box, so it matches the MAUI build
     // exactly — and it drops the per-frame string building too.
-    const cw = charW(10.5);
+    const cw = charW(10.5 * ts);
     const cells = Math.max(8, ((r.w / cw) | 0) - 1);
     const filled = Math.round(clamp(bar.progress, 0, 1) * cells);
-    const bm = blockMetrics(10.5);
-    const midY = r.y + 12 + (r.h - 12) / 2;
+    const bm = blockMetrics(10.5 * ts);
+    const midY = r.y + labH + (r.h - labH) / 2;
     const top = midY - bm.asc, hgt = bm.asc + bm.desc;
     const css = bar.state === BAR_FAILED ? T.DimRed.css : fade(color, 0.9);
     if (filled > 0) {
@@ -1630,10 +1715,12 @@ const PH_INTRO = 0, PH_WORKING = 1, PH_BREACHED = 2, PH_FADEOUT = 3;
 const INTRO_DUR = 1.2, BREACH_DUR = 3.2, FADEOUT_DUR = 0.5;
 
 class CompanyPanel extends Panel {
+  configure(c) { super.configure(c); this.showLogos = c.logos; }
   constructor() {
     super();
     this.title = "TARGET ACQUISITION";
     this.accent = T.Red;
+    this.showLogos = true;
     this.deck = shuffled(COMPANIES);
     this.index = 0;
     this.phase = PH_INTRO;
@@ -1670,7 +1757,7 @@ class CompanyPanel extends Panel {
             this.setPhase(PH_BREACHED, BREACH_DUR);
             // Warm the next logo now so it is decoded by the time its intro
             // fades in, instead of flashing the monogram for a frame or two.
-            if (this.index + 1 < this.deck.length) Logos.get(this.deck[this.index + 1]);
+            if (this.showLogos && this.index + 1 < this.deck.length) Logos.get(this.deck[this.index + 1]);
           }
         }
         break;
@@ -1703,7 +1790,7 @@ class CompanyPanel extends Panel {
     const logo = { x: logoX, y: logoY, w: logoSize, h: logoSize };
     const brand = breached ? grayscale(company.accent) : company.accent;
 
-    const image = Logos.get(company);
+    const image = this.showLogos ? Logos.get(company) : null;
     if (image) {
       // Fit inside the square, preserving aspect — wordmark logos are far
       // wider than tall and would otherwise be stretched square.
@@ -1724,18 +1811,19 @@ class CompanyPanel extends Panel {
       textC(company.initials, logo.x, logo.w, logo.y, logo.h);
     }
 
-    ctx.font = fontMonoBold(Math.min(22, r.w / (company.name.length * 0.75)));
+    const ts = this.ts;
+    ctx.font = fontMonoBold(Math.min(22 * ts, r.w / (company.name.length * 0.75)));
     ctx.fillStyle = fade(breached ? T.Gray : T.White, alpha);
-    textC(company.name.toUpperCase(), r.x, r.w, logo.y + logo.h + 4, 26);
+    textC(company.name.toUpperCase(), r.x, r.w, logo.y + logo.h + 4, 26 * ts);
 
-    const bodyY = logo.y + logo.h + 34;
+    const bodyY = logo.y + logo.h + 8 + 26 * ts;
     if (this.phase === PH_WORKING || this.phase === PH_INTRO) this.drawSteps(r, bodyY, alpha);
     else this.drawBreach(r, logo, bodyY, alpha);
   }
   drawSteps(r, y, alpha) {
-    const lineH = 17;
+    const lineH = 17 * this.ts;
     const bottom = r.y + r.h;
-    ctx.font = fontMono(11);
+    ctx.font = fontMono(11 * this.ts);
     const firstShown = Math.max(0, this.stepIndex - (((bottom - y) / lineH) | 0) + 2);
     for (let i = firstShown; i < this.stepIndex && y < bottom - lineH; i++, y += lineH) {
       ctx.fillStyle = fade(T.DimGreen, alpha);
@@ -1754,7 +1842,7 @@ class CompanyPanel extends Panel {
       ctx.strokeRect(bx + 0.5, by + 0.5, barW - 1, 7 - 1);
       ctx.fillStyle = fade(T.Cyan, 0.85 * alpha);
       ctx.fillRect(bx + 1, by + 1, (barW - 2) * this.stepProgress, 5);
-      ctx.font = fontMono(9);
+      ctx.font = fontMono(9 * this.ts);
       ctx.fillStyle = fade(T.Cyan, 0.8 * alpha);
       textR(Math.round(this.stepProgress * 100) + "%", r.x, r.w - 20, y + 12, 12);
     }
@@ -1772,7 +1860,7 @@ class CompanyPanel extends Panel {
 
     const blink = 0.72 + 0.28 * Math.sin(this.phaseTime * 9);
     const bottom = r.y + r.h;
-    const bh = Math.max(30, Math.min(44, bottom - y - 6));
+    const bh = Math.max(30 * this.ts, Math.min(44 * this.ts, bottom - y - 6));
     if (bh < 22) return;
     const bx = r.x + 14, bw = r.w - 28;
 
@@ -1782,7 +1870,7 @@ class CompanyPanel extends Panel {
     ctx.strokeStyle = fade(T.Red, blink * alpha);
     roundRect(bx, y, bw, bh, 4); ctx.stroke();
 
-    ctx.font = fontMonoBold(Math.min(19, bw / 14));
+    ctx.font = fontMonoBold(Math.min(19 * this.ts, bw / 14));
     ctx.fillStyle = fade(T.Red, blink * alpha);
     textC("BREACHED SUCCESSFULLY", bx, bw, y, bh);
   }
@@ -1836,6 +1924,7 @@ class CodePanel extends Panel {
     this.typed = 0; this.typeAcc = 0;
     this.cps = 30 + rnd() * 25;
     this.cpsRetarget = 0; this.pauseLeft = 0;
+    this.longPauses = true;
     this.current = this.generateLine();
     for (let i = 0; i < 55; i++) { this.done.push(this.current); this.current = this.generateLine(); }
   }
@@ -1859,7 +1948,7 @@ class CodePanel extends Panel {
     this.layer.invalidate();
     this.current = this.generateLine();
     const roll = rndInt(100);
-    this.pauseLeft = roll < 6 ? 1.0 + rnd() * 1.8        // stares at the screen
+    this.pauseLeft = roll < 6 && this.longPauses ? 1.0 + rnd() * 1.8   // stares at the screen
                    : roll < 40 ? 0.08 + rnd() * 0.30     // normal line break
                    : 0;                                  // in the zone
   }
@@ -1867,9 +1956,11 @@ class CodePanel extends Panel {
    *  fillText calls — and it only moves when a line is completed, roughly
    *  twice a second. Redrawing all of it for every typed character was by
    *  a wide margin the most expensive thing this wallpaper did. */
+  configure(c) { super.configure(c); this.longPauses = c.pauses; }
   drawStatic(r) {
-    ctx.font = fontMono(12.5);
-    const lh = lineHeight(12.5), cw = charW(12.5);
+    const fs = 12.5 * this.ts;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs), cw = charW(fs);
     let y = r.y + r.h - lh;
     for (let i = this.done.length - 1; i >= 0; i--) {
       y -= lh;
@@ -1880,8 +1971,9 @@ class CodePanel extends Panel {
   /** The line being typed grows by a character or two per frame, so it
    *  and its cursor are drawn live over the cached backlog. */
   drawLive(r) {
-    ctx.font = fontMono(12.5);
-    const lh = lineHeight(12.5), cw = charW(12.5);
+    const fs = 12.5 * this.ts;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs), cw = charW(fs);
     const y = r.y + r.h - lh;
     const cursorX = this.drawLine(this.current, r, y, cw, lh, this.typed);
     if (this.pauseLeft <= 0 || (Date.now() % 1000) < 500) {
@@ -2150,12 +2242,16 @@ const SH_TYPING = 0, SH_RUNNING = 1, SH_PAUSE = 2;
 class ShellPanel extends Panel {
   constructor() {
     super();
-    const host = "synapse-" + pad0(rndInt(1, 20), 2);
-    this.title = "TTY // root@" + host;
+    // the host name this instance made up for itself, used unless one is set
+    this._host = "synapse-" + pad0(rndInt(1, 20), 2);
+    this.user = "root"; this.host = this._host;
+    this.title = this.defaultTitle();
     this.accent = T.Cyan;
-    this.prompt = "root@" + host + ":~# ";
+    this.prompt = "root@" + this.host + ":~# ";
     this.lines = [];
+    this._cmdKeys = "*";            // "*" = every command
     this.deck = shuffled(buildShellDeck());
+    this.cmd = null;
     this.deckIndex = 0;
     this.state = SH_PAUSE;
     this.typing = "";
@@ -2174,6 +2270,24 @@ class ShellPanel extends Panel {
       const evs = cmd.run();
       for (let j = 0; j < evs.length; j++) this.apply(evs[j]);
       this.deckIndex++;
+    }
+  }
+  defaultTitle() { return "TTY // " + this.user + "@" + this.host; }
+  configure(c) {
+    this.user = c.user || "root";
+    this.host = c.host || this._host;
+    this.prompt = this.user + "@" + this.host + (this.user === "root" ? ":~# " : ":~$ ");
+    super.configure(c);
+    // a new command set takes effect from the next command; the one being
+    // typed or run is held in this.cmd and finishes as it started
+    let keys = SHELL_COMMANDS.filter(function (k) { return c.cmd[k[0]]; }).map(function (k) { return k[0]; });
+    // none ticked runs all of them, rather than leaving a dead terminal
+    if (!keys.length || keys.length === SHELL_COMMANDS.length) keys = null;
+    const sig = keys ? keys.join(",") : "*";
+    if (sig !== this._cmdKeys) {
+      this.deck = shuffled(buildShellDeck(keys));
+      this.deckIndex = -1;
+      this._cmdKeys = sig;
     }
   }
   push(text, color, promptLen) {
@@ -2210,7 +2324,7 @@ class ShellPanel extends Panel {
     }
     if (this.typedChars >= this.typing.length) {
       this.push(this.prompt + this.typing, 0, this.prompt.length);
-      this.events = this.deck[this.deckIndex].run();
+      this.events = this.cmd.run();
       this.eventIndex = 0;
       if (this.events.length > 0) {
         this.eventDelay = this.events[0].d;
@@ -2240,7 +2354,8 @@ class ShellPanel extends Panel {
     if (this.pauseLeft > 0) return;
     this.deckIndex++;
     if (this.deckIndex >= this.deck.length) { this.deck = shuffled(this.deck); this.deckIndex = 0; }
-    this.typing = this.deck[this.deckIndex].build();
+    this.cmd = this.deck[this.deckIndex];
+    this.typing = this.cmd.build();
     this.typedChars = 0;
     this.typeAcc = 0;
     this.cps = 14 + rnd() * 16;
@@ -2249,8 +2364,9 @@ class ShellPanel extends Panel {
   /** Scrollback. Changes only when a line is pushed or an in-place
    *  progress line rewrites itself — never per frame, even mid-download. */
   drawStatic(r) {
-    ctx.font = fontMono(11);
-    const lh = lineHeight(11), cw = charW(11);
+    const fs = 11 * this.ts;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs), cw = charW(fs);
     const maxChars = Math.max(8, (r.w / cw) | 0);
     let y = r.y + r.h - lh * 2;          // the bottom row is the live one
     for (let i = this.lines.length - 1; i >= 0; i--, y -= lh) {
@@ -2271,8 +2387,9 @@ class ShellPanel extends Panel {
   /** Bottom row: the active prompt/typing line (or a bare cursor while a
    *  command runs). It gains characters and blinks, so it stays live. */
   drawLive(r) {
-    ctx.font = fontMono(11);
-    const lh = lineHeight(11), cw = charW(11);
+    const fs = 11 * this.ts;
+    ctx.font = fontMono(fs);
+    const lh = lineHeight(fs), cw = charW(fs);
     const y = r.y + r.h - lh;
     if (this.state === SH_TYPING || this.state === SH_PAUSE) {
       const typed = this.state === SH_TYPING ? this.typing.slice(0, this.typedChars) : "";
@@ -2850,15 +2967,25 @@ class TopCommand {
   }
 }
 
-/** All available commands — add new ones here. */
-function buildShellDeck() {
-  return [
-    new PingCommand(), new WgetCommand(), new DockerPullCommand(), new AptInstallCommand(),
-    new GitCloneCommand(), new MakeCommand(), new LsCommand(), new DfCommand(),
-    new DdCommand(), new GrepCommand(), new JournalctlCommand(), new SynctlCommand(),
-    new MeshctlCommand(), new TarCommand(), new RsyncCommand(), new SystemctlStatusCommand(),
-    new CurlCommand(), new Sha256sumCommand(), new TopCommand()
-  ];
+/** All available commands — add new ones here. [key, label, class]; the
+ *  key is what a TTY panel's settings save, the label what they show. */
+const SHELL_COMMANDS = [
+  ["ping", "ping", PingCommand], ["wget", "wget", WgetCommand],
+  ["docker", "docker pull", DockerPullCommand], ["apt", "apt-get install", AptInstallCommand],
+  ["git", "git clone", GitCloneCommand], ["make", "make", MakeCommand],
+  ["ls", "ls -la", LsCommand], ["df", "df -h", DfCommand], ["dd", "dd", DdCommand],
+  ["grep", "grep -rn", GrepCommand], ["journalctl", "journalctl", JournalctlCommand],
+  ["synctl", "synctl (invented)", SynctlCommand], ["meshctl", "meshctl (invented)", MeshctlCommand],
+  ["tar", "tar -xvzf", TarCommand], ["rsync", "rsync", RsyncCommand],
+  ["systemctl", "systemctl status", SystemctlStatusCommand], ["curl", "curl -sI", CurlCommand],
+  ["sha256sum", "sha256sum", Sha256sumCommand], ["top", "top", TopCommand]
+];
+/** A deck of the commands with these keys — all of them without keys. */
+function buildShellDeck(keys) {
+  const out = [];
+  for (let i = 0; i < SHELL_COMMANDS.length; i++)
+    if (!keys || keys.indexOf(SHELL_COMMANDS[i][0]) >= 0) out.push(new SHELL_COMMANDS[i][2]());
+  return out;
 }
 
 /* ---------------------------------------------------------------------
@@ -2889,18 +3016,19 @@ const PANEL_TYPES = {
 const PANEL_TYPE_KEYS = Object.keys(PANEL_TYPES);
 const LAYOUT_GAP = 6, LAYOUT_MARGIN = 8;
 
-/* A layout is a tree. A leaf is a panel, { p: type, id }; a split lays its
+/* A layout is a tree. A leaf is a panel, { p: type, id, s? }; a split lays its
    children side by side ("h") or stacked ("v"), { d, c: [children],
    f: [fractions summing to 1] }. Fractions share out the split's size net
    of the gaps between its children. The id ties a leaf to its live panel
    instance, so moving a panel keeps its content running instead of
-   restarting it. */
+   restarting it. `s` holds that panel's own settings, only the values that
+   differ from its type's defaults (see panelConfig). */
 
 function jitter(base, amount) { return base + (rnd() * 2 - 1) * amount; }
 
 /** The arrangement the wallpaper ships with, its split fractions jittered
  *  so the geometry differs a little on every load. */
-function stockLayout() {
+function defaultLayout() {
   const leftW = jitter(0.22, 0.02), centerW = jitter(0.46, 0.02);
   const bottomH = jitter(0.18, 0.02);
   const leftSplit = jitter(0.58, 0.04), rightSplit = jitter(0.55, 0.04);
@@ -2954,7 +3082,10 @@ function validateTree(n) {
       if (!id || seen.has(id)) id = 0;
       if (id) seen.add(id);
       leaves++;
-      return { p: n.p, id: id };
+      const out = { p: n.p, id: id };
+      const s = diffState(panelConfig(n.p, n.s), panelDefaults(n.p));
+      if (s) out.s = s;
+      return out;
     }
     if ((n.d !== "h" && n.d !== "v") || !Array.isArray(n.c)) return null;
     const c = [], f = [];
@@ -3076,16 +3207,17 @@ function dockLeaf(root, leaf, targetId, side, share) {
 function swapLeaves(root, idA, idB) {
   const a = findParent(root, idA, null, -1), b = findParent(root, idB, null, -1);
   if (!a || !b) return root;
-  const t = { p: a.leaf.p, id: a.leaf.id };
-  a.leaf.p = b.leaf.p; a.leaf.id = b.leaf.id;
-  b.leaf.p = t.p; b.leaf.id = t.id;
+  const pa = a.parent ? a.parent.c : null, pb = b.parent ? b.parent.c : null;
+  if (!pa || !pb) return root;
+  pa[a.index] = b.leaf;
+  pb[b.index] = a.leaf;
   return root;
 }
 
 /** Owns the panel instances, one per layout leaf, and lays them out. */
 class PanelManager {
   constructor() {
-    this.stock = stockLayout();
+    this.defaultTree = defaultLayout();
     this.instances = new Map();      // leaf id -> panel
     this.panels = [];                // in layout order, for update and draw
     this.root = null;
@@ -3093,8 +3225,8 @@ class PanelManager {
     this.splitters = [];
     this.setTree(this.currentTree());
   }
-  /** The tree in force: the user's, or the stock one when there is none. */
-  currentTree() { return S.layout ? S.layout.root : this.stock; }
+  /** The tree in force: the user's, or the default one when there is none. */
+  currentTree() { return S.layout ? S.layout.root : this.defaultTree; }
   /** Makes the instances match the tree. A leaf whose id is already live
    *  keeps its panel — and with it the content that panel was showing; a
    *  leaf of a different type under the same id gets a fresh one. */
@@ -3109,6 +3241,7 @@ class PanelManager {
         p._type = leaf.p;
       }
       p._leafId = leaf.id;
+      p.configure(panelConfig(leaf.p, leaf.s));
       keep.set(leaf.id, p);
       list.push(p);
     });
@@ -3116,7 +3249,12 @@ class PanelManager {
     this.instances = keep;
     this.panels = list;
   }
-  update(dt) { for (let i = 0; i < this.panels.length; i++) this.panels[i].update(dt); }
+  update(dt) {
+    for (let i = 0; i < this.panels.length; i++) {
+      const p = this.panels[i];
+      p.update(dt * p.speed);
+    }
+  }
   /** A Layer notices its own geometry changing, but a resize can also
    *  change DPR and re-measure every font while a panel keeps its pixel
    *  size, so drop every cache explicitly rather than reason about it. */
@@ -3130,8 +3268,7 @@ class PanelManager {
     for (let i = 0; i < this.leaves.length; i++) {
       const l = this.leaves[i], p = this.instances.get(l.node.id);
       p.x = l.r.x; p.y = l.r.y; p.w = l.r.w; p.h = l.r.h;
-      // telemetry reads best side by side in a wide slot, stacked in a tall one
-      if (p instanceof GraphPanel) p.horizontal = p.w >= p.h * 1.4;
+      if (p instanceof GraphPanel) p.syncOrientation();
     }
   }
 }
@@ -3336,8 +3473,8 @@ function unitParse(u, text) {
 
 const SETTINGS_SCHEMA = [
   { id: "layout", title: "LAYOUT", rows: [
-    { kind: "button", label: "⊞ EDIT LAYOUT",
-      tip: "Move, resize, add and remove panels over the live wallpaper (L).",
+    { kind: "button", label: "⊞ LAYOUT & PANELS",
+      tip: "Move, resize, add and remove panels over the live wallpaper, and change each panel's own settings (L).",
       run: function () { LayoutEditor.enter(); } }
   ]},
   { id: "fx", title: "CRT // OVERLAY", apply: "fx", rows: [
@@ -3386,25 +3523,147 @@ const SETTINGS_SCHEMA = [
   ]}
 ];
 
-function forEachSettingRow(fn) {
-  for (let i = 0; i < SETTINGS_SCHEMA.length; i++) {
-    const sec = SETTINGS_SCHEMA[i];
-    for (let j = 0; j < sec.rows.length; j++) fn(sec.rows[j], sec);
+/** Holds every value in `o` to what its row allows, in place: ranges
+ *  clamped (and rounded where the unit is whole numbers), unknown choices
+ *  back to their default, text cut to length. */
+function sanitizeRows(o, rows, defaults) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.path) continue;
+    const v = getPath(o, row.path);
+    if (row.kind === "range") {
+      const c = clamp(v, row.min, row.max);
+      setPath(o, row.path, row.unit && row.unit.int ? Math.round(c) : c);
+    } else if (row.kind === "select" && !row.options.some(function (x) { return x[0] === v; })) {
+      setPath(o, row.path, getPath(defaults, row.path));
+    } else if (row.kind === "text" && v.length > (row.max || 40)) {
+      setPath(o, row.path, v.slice(0, row.max || 40));
+    }
   }
 }
-/** Clamps every ranged value and drops unknown choices, in place. */
 function sanitizeState(s) {
   if (s.layout !== null)
     s.layout = s.layout && typeof s.layout === "object" && !Array.isArray(s.layout)
       ? { root: validateTree(s.layout.root) } : null;
-  forEachSettingRow(function (row) {
-    if (!row.path) return;
-    const v = getPath(s, row.path);
-    if (row.kind === "range") setPath(s, row.path, clamp(v, row.min, row.max));
-    else if (row.kind === "select" && !row.options.some(function (o) { return o[0] === v; }))
-      setPath(s, row.path, getPath(DEFAULTS, row.path));
-  });
+  for (let i = 0; i < SETTINGS_SCHEMA.length; i++) sanitizeRows(s, SETTINGS_SCHEMA[i].rows, DEFAULTS);
 }
+
+/* ---------------------------------------------------------------------
+   Settings — per-panel schema
+   ------------------------------------------------------------------ */
+
+/* Each panel in the layout has settings of its own: PANEL_COMMON_ROWS for
+   every panel, then its type's rows from PANEL_ROWS. Same row format as
+   SETTINGS_SCHEMA, with paths relative to the panel's settings and each
+   row's default in `def`. A layout leaf stores only what differs from
+   those defaults, in leaf.s; panelConfig() merges them back. */
+
+const PANEL_ACCENTS = {
+  green: T.Green, cyan: T.Cyan, blue: T.Blue, orange: T.Orange,
+  red: T.Red, white: T.White, gray: T.Gray
+};
+const U_INT = { scale: 1, dp: 0, suffix: "", int: true };
+
+const PANEL_COMMON_ROWS = [
+  { kind: "text", label: "Title", path: "title", def: "", max: 48, placeholder: "default",
+    tip: "Left blank, the panel keeps its own title." },
+  { kind: "select", label: "Accent colour", path: "accent", def: "default",
+    options: [["default", "default"], ["green", "green"], ["cyan", "cyan"], ["blue", "blue"],
+              ["orange", "amber"], ["red", "red"], ["white", "white"], ["gray", "gray"]],
+    tip: "Colour of the panel's frame, title and cursor." },
+  { kind: "check", label: "Title bar", path: "titleBar", def: true },
+  { kind: "range", label: "Text size", path: "text", def: 1, min: 0.6, max: 2.5, step: 0.05, unit: U_PCT,
+    tip: "Size of this panel's text. Larger text shows fewer lines, and costs less." },
+  { kind: "range", label: "Speed", path: "speed", def: 1, min: 0, max: 3, step: 0.05, unit: U_SPEED,
+    tip: "How fast this panel runs, on top of master speed. 0 freezes it." }
+];
+
+const PANEL_ROWS = {
+  trace: [
+    { kind: "select", label: "Feed", path: "feed", def: "system",
+      options: [["system", "system log"], ["events", "event feed"]],
+      tip: "Timestamped system log lines, or the shorter node event feed." },
+    { kind: "range", label: "Errors & warnings", path: "alerts", def: 1, min: 0, max: 4, step: 0.05, unit: U_PCT,
+      tip: "How often a line is an error or a warning. 100% is the default mix." }
+  ],
+  hex: [
+    { kind: "range", label: "Highlighted rows", path: "highlights", def: 1, min: 0, max: 5, step: 0.05, unit: U_PCT }
+  ],
+  code: [
+    { kind: "check", label: "Thinking pauses", path: "pauses", def: true,
+      tip: "Now and then the typist stops for a second or two, as if thinking." }
+  ],
+  target: [
+    { kind: "check", label: "Company logos", path: "logos", def: true,
+      tip: "Off, each company is shown as a monogram in its brand colour." }
+  ],
+  tty: [
+    { kind: "text", label: "User", path: "user", def: "", max: 24, placeholder: "root",
+      tip: "The prompt's user. Anyone but root gets a $ prompt." },
+    { kind: "text", label: "Host", path: "host", def: "", max: 32, placeholder: "random",
+      tip: "The prompt's host name. Left blank, each terminal makes one up." }
+  ],
+  telemetry: [
+    { kind: "range", label: "Charts", path: "charts", def: 2, min: 1, max: 4, step: 1, unit: U_INT },
+    { kind: "range", label: "Counters", path: "counters", def: 3, min: 0, max: 6, step: 1, unit: U_INT },
+    { kind: "select", label: "Chart layout", path: "orient", def: "auto",
+      options: [["auto", "auto"], ["side", "side by side"], ["stack", "stacked"]],
+      tip: "Auto puts the charts side by side in a wide panel and stacks them in a tall one." }
+  ],
+  pipeline: [
+    { kind: "range", label: "Bars", path: "bars", def: 6, min: 1, max: 12, step: 1, unit: U_INT,
+      tip: "How many tasks run at once. A panel too short for them all shows the first few." },
+    { kind: "range", label: "Failures", path: "failures", def: 1, min: 0, max: 4, step: 0.05, unit: U_PCT,
+      tip: "How often a task fails. 100% is the default rate." },
+    { kind: "range", label: "Endless tasks", path: "endless", def: 1, min: 0, max: 4, step: 0.05, unit: U_PCT,
+      tip: "How often a task loops forever instead of finishing." }
+  ],
+  stream: [
+    { kind: "range", label: "Highlighted runs", path: "highlights", def: 1, min: 0, max: 5, step: 0.05, unit: U_PCT }
+  ]
+};
+
+/* The sections a panel's settings window shows. Built once per type. */
+const _panelSections = {};
+function panelSections(type) {
+  let secs = _panelSections[type];
+  if (secs) return secs;
+  secs = [{ id: "panel", title: "PANEL", rows: PANEL_COMMON_ROWS }];
+  if (PANEL_ROWS[type].length) secs.push({ id: type, title: PANEL_TYPES[type].name, rows: PANEL_ROWS[type] });
+  if (type === "tty") {
+    secs.push({ id: "cmds", title: "COMMANDS", closed: true, rows:
+      [{ kind: "note", label: "Which commands this terminal runs. With none ticked, it runs them all." }]
+      .concat(SHELL_COMMANDS.map(function (k) {
+        return { kind: "check", label: k[1], path: "cmd." + k[0], def: true };
+      })) });
+  }
+  return (_panelSections[type] = secs);
+}
+
+function setPathDeep(o, path, v) {
+  const p = path.split(".");
+  for (let i = 0; i < p.length - 1; i++) o = o[p[i]] || (o[p[i]] = {});
+  o[p[p.length - 1]] = v;
+}
+const _panelDefaults = {};
+function panelDefaults(type) {
+  let d = _panelDefaults[type];
+  if (d) return d;
+  d = {};
+  panelSections(type).forEach(function (sec) {
+    sec.rows.forEach(function (row) { if (row.path) setPathDeep(d, row.path, row.def); });
+  });
+  return (_panelDefaults[type] = d);
+}
+/** A panel's full settings: its type's defaults with `s` merged over them,
+ *  every value clamped to what its row allows. */
+function panelConfig(type, s) {
+  const c = cloneState(panelDefaults(type));
+  mergeInto(c, s);
+  panelSections(type).forEach(function (sec) { sanitizeRows(c, sec.rows, panelDefaults(type)); });
+  return c;
+}
+
 
 /* What has to happen after a value changes, by group. Anything read
    straight from S every frame (master speed) needs no entry. */
@@ -3420,6 +3679,7 @@ const APPLY = {
     if (!dashboard) return;
     dashboard.applyLayout();
     LayoutEditor.refresh();
+    PanelGears.refresh();
   }
 };
 function applyAll() {
@@ -3455,16 +3715,18 @@ function domEl(tag, cls, parent, text) {
   return e;
 }
 
-/* Nothing of the panel exists until it is first opened: closed, the only
-   cost is the one CFG element and its click handler. */
-const Settings = (function () {
-  const cfgBtn = document.getElementById("hk-cfg");
-  let win = null, statusEl = null, fpsEl = null;
-  let bindings = [];
-  let isOpen = false;
+/* ---------------------------------------------------------------------
+   Settings — form controls
+   ------------------------------------------------------------------ */
+
+/* Builds window contents from a schema (see SETTINGS_SCHEMA) bound to some
+   state: the settings window binds it to S, a panel's settings window to
+   that one panel's values. ctx is { get(path), set(row, sec, value),
+   status(msg), state() }, where state() is what show/dis predicates see. */
+const Form = (function () {
+  const el = domEl;
   let closePop = null;            // closes whichever dropdown list is open
 
-  const el = domEl;
   function onActivate(e, fn) {
     e.addEventListener("click", fn);
     e.addEventListener("keydown", function (ev) {
@@ -3479,27 +3741,11 @@ const Settings = (function () {
     return b;
   }
 
-  /* Actions above the sections. An entry either runs, or opens a menu of
-     [value, label, run] items. */
-  const TOOLBAR = [
-    { label: "IMPORT ▾", title: "Import settings", menu: [
-      ["code", "Scene code…", function () { CodeBox.open("import"); }],
-      ["json", "JSON file…", function () { pickJson(); }]
-    ]},
-    { label: "EXPORT ▾", title: "Export settings", menu: [
-      ["link", "Wallpaper link", function () { copyLink(); }],
-      ["code", "Scene code…", function () { CodeBox.open("export"); }],
-      ["json", "JSON file", function () { downloadJson(); }]
-    ]},
-    { label: "RESET", title: "Restore every setting to its default",
-      run: function () { loadState({}); status("defaults restored"); } }
-  ];
-
   /* ---- row builders ------------------------------------------------
      Each returns a binding { row, rowEl, input, sync }, where sync()
-     pulls the control back in line with S. */
+     pulls the control back in line with the state the form edits. */
   const ROW_KINDS = {
-    range: function (parent, row, sec) {
+    range: function (parent, row, sec, ctx) {
       const r = el("div", "hk-row", parent);
       const lab = el("div", "hk-lab", r);
       el("span", null, lab, row.label);
@@ -3517,10 +3763,10 @@ const Settings = (function () {
       inp.addEventListener("input", function () {
         const v = parseFloat(inp.value);
         val.textContent = unitShow(u, v);
-        if (row.live !== false) commit(row, sec, v);
+        if (row.live !== false) ctx.set(row, sec, v);
       });
       if (row.live === false)
-        inp.addEventListener("change", function () { commit(row, sec, parseFloat(inp.value)); });
+        inp.addEventListener("change", function () { ctx.set(row, sec, parseFloat(inp.value)); });
 
       /* The readout doubles as a text field for exact values: the slider
          snaps to its step, a typed value does not. The slider then shows
@@ -3532,7 +3778,7 @@ const Settings = (function () {
         box.spellcheck = false;
         box.inputMode = "decimal";
         box.setAttribute("aria-label", row.label);
-        box.value = unitEditText(u, getPath(S, row.path));
+        box.value = unitEditText(u, ctx.get(row.path));
         val.replaceWith(box);
         box.focus();
         box.select();
@@ -3542,12 +3788,12 @@ const Settings = (function () {
           done = true;
           if (accept) {
             const v = unitParse(u, box.value);
-            if (isNaN(v)) status("not a number: " + box.value.trim());
+            if (isNaN(v)) ctx.status("not a number: " + box.value.trim());
             else {
               const c = clamp(v, row.min, row.max);
-              if (c !== v) status(row.label.toLowerCase() + " limited to " +
+              if (c !== v) ctx.status(row.label.toLowerCase() + " limited to " +
                                   unitNumber(u, row.min) + "–" + unitNumber(u, row.max) + u.suffix);
-              if (c !== getPath(S, row.path)) commit(row, sec, c);
+              if (c !== ctx.get(row.path)) ctx.set(row, sec, c);
             }
           }
           box.replaceWith(val);
@@ -3566,31 +3812,55 @@ const Settings = (function () {
       });
 
       function sync() {
-        const v = getPath(S, row.path);
+        const v = ctx.get(row.path);
         inp.value = v;
         val.textContent = unitShow(u, v);
       }
       return { row: row, rowEl: r, input: inp, sync: sync };
     },
-    check: function (parent, row, sec) {
+    check: function (parent, row, sec, ctx) {
       const r = el("label", "hk-row hk-chk", parent);
       const inp = el("input", null, r);
       inp.type = "checkbox";
       el("span", "hk-box", r);
       el("span", null, r, row.label);
-      inp.addEventListener("change", function () { commit(row, sec, inp.checked); });
+      inp.addEventListener("change", function () { ctx.set(row, sec, inp.checked); });
       return { row: row, rowEl: r, input: inp, sync: function () {
-        inp.checked = !!getPath(S, row.path);
+        inp.checked = !!ctx.get(row.path);
       }};
     },
-    select: function (parent, row, sec) {
+    select: function (parent, row, sec, ctx) {
       const r = el("div", "hk-row", parent);
       el("div", "hk-lab", r, row.label);
       const sel = makeSelect(el("div", "hk-sel", r), row.options);
       sel.el.setAttribute("aria-label", row.label);
-      sel.onChange = function () { commit(row, sec, sel.value); };
+      sel.onChange = function () { ctx.set(row, sec, sel.value); };
       return { row: row, rowEl: r, input: sel.el, sync: function () {
-        sel.value = getPath(S, row.path);
+        sel.value = ctx.get(row.path);
+      }};
+    },
+    /* Commits on Enter or on leaving the field, not per keystroke — a
+       half-typed host name is not worth a repaint. Esc puts it back. */
+    text: function (parent, row, sec, ctx) {
+      const r = el("div", "hk-row", parent);
+      el("div", "hk-lab", r, row.label);
+      const inp = el("input", "hk-text", r);
+      inp.type = "text";
+      inp.spellcheck = false;
+      inp.maxLength = row.max || 40;
+      if (row.placeholder) inp.placeholder = row.placeholder;
+      inp.setAttribute("aria-label", row.label);
+      inp.addEventListener("change", function () { ctx.set(row, sec, inp.value.trim()); });
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+        else if (e.key === "Escape") {
+          e.preventDefault(); e.stopPropagation();
+          inp.value = ctx.get(row.path);
+          inp.blur();
+        }
+      });
+      return { row: row, rowEl: r, input: inp, sync: function () {
+        if (document.activeElement !== inp) inp.value = ctx.get(row.path);
       }};
     },
     note: function (parent, row) {
@@ -3603,34 +3873,6 @@ const Settings = (function () {
       return { row: row, rowEl: r, input: b, sync: null };
     }
   };
-
-  function commit(row, sec, v) {
-    setPath(S, row.path, v);
-    const name = row.apply || sec.apply;
-    if (name && APPLY[name]) APPLY[name]();
-    requestDraw();
-    persistLater();
-    refreshVis();
-  }
-
-  function refreshVis() {
-    for (let i = 0; i < bindings.length; i++) {
-      const b = bindings[i], row = b.row;
-      if (row.show) b.rowEl.style.display = row.show(S) ? "" : "none";
-      if (row.dis && b.input) {
-        const d = !!row.dis(S);
-        b.rowEl.classList.toggle("dis", d);
-        if ("disabled" in b.input) b.input.disabled = d;
-        else b.input.setAttribute("aria-disabled", d ? "true" : "false");
-      }
-    }
-  }
-  /** Pulls every control back in line with S. Free while never opened. */
-  function refresh() {
-    if (!win) return;
-    for (let i = 0; i < bindings.length; i++) if (bindings[i].sync) bindings[i].sync();
-    refreshVis();
-  }
 
   /* ---- dropdown ----------------------------------------------------
      Stand-in for <select>, rendered as plain divs.
@@ -3729,6 +3971,89 @@ const Settings = (function () {
     return api;
   }
 
+  /** Builds `sections` into `body`. Returns { refresh() }, which pulls
+   *  every control back in line with the state. */
+  function build(body, sections, ctx) {
+    const bindings = [];
+    function refreshVis() {
+      const st = ctx.state();
+      for (let i = 0; i < bindings.length; i++) {
+        const b = bindings[i], row = b.row;
+        if (row.show) b.rowEl.style.display = row.show(st) ? "" : "none";
+        if (row.dis && b.input) {
+          const d = !!row.dis(st);
+          b.rowEl.classList.toggle("dis", d);
+          if ("disabled" in b.input) b.input.disabled = d;
+          else b.input.setAttribute("aria-disabled", d ? "true" : "false");
+        }
+      }
+    }
+    const rowCtx = {
+      get: ctx.get, status: ctx.status,
+      set: function (row, sec, v) { ctx.set(row, sec, v); refreshVis(); }
+    };
+    sections.forEach(function (sec) {
+      const box = el("div", "hk-sec" + (sec.closed ? " closed" : ""), body);
+      const h = el("div", "hk-sh", box, sec.title);
+      h.tabIndex = 0;
+      h.setAttribute("role", "button");
+      onActivate(h, function () { box.classList.toggle("closed"); });
+      const rows = el("div", "hk-rows", box);
+      sec.rows.forEach(function (row) {
+        const b = ROW_KINDS[row.kind](rows, row, sec, rowCtx);
+        if (row.tip) b.rowEl.title = row.tip;
+        bindings.push(b);
+      });
+    });
+    return { refresh: function () {
+      for (let i = 0; i < bindings.length; i++) if (bindings[i].sync) bindings[i].sync();
+      refreshVis();
+    }};
+  }
+
+  return {
+    build: build, makeSelect: makeSelect, onActivate: onActivate, mkButton: mkButton,
+    /** Closes an open dropdown list; true when there was one. */
+    closePopup: function () { if (!closePop) return false; closePop(); return true; }
+  };
+})();
+
+/* Nothing of the panel exists until it is first opened: closed, the only
+   cost is the one CFG element and its click handler. */
+const Settings = (function () {
+  const cfgBtn = document.getElementById("hk-cfg");
+  let win = null, statusEl = null, fpsEl = null;
+  let isOpen = false;
+
+  const el = domEl, onActivate = Form.onActivate, mkButton = Form.mkButton;
+
+  /* Actions above the sections. An entry either runs, or opens a menu of
+     [value, label, run] items. */
+  const TOOLBAR = [
+    { label: "IMPORT ▾", title: "Import settings", menu: [
+      ["code", "Scene code…", function () { CodeBox.open("import"); }],
+      ["json", "JSON file…", function () { pickJson(); }]
+    ]},
+    { label: "EXPORT ▾", title: "Export settings", menu: [
+      ["link", "Wallpaper link", function () { copyLink(); }],
+      ["code", "Scene code…", function () { CodeBox.open("export"); }],
+      ["json", "JSON file", function () { downloadJson(); }]
+    ]},
+    { label: "RESET", title: "Restore every setting to its default",
+      run: function () { loadState({}); status("defaults restored"); } }
+  ];
+
+  function commit(row, sec, v) {
+    setPath(S, row.path, v);
+    const name = row.apply || sec.apply;
+    if (name && APPLY[name]) APPLY[name]();
+    requestDraw();
+    persistLater();
+  }
+  let form = null;
+  /** Pulls every control back in line with S. Free while never opened. */
+  function refresh() { if (form) form.refresh(); }
+
   /* ---- window ------------------------------------------------------- */
   function build() {
     win = el("div", "hk-win", document.body);
@@ -3746,7 +4071,7 @@ const Settings = (function () {
     TOOLBAR.forEach(function (t) {
       const b = mkButton(tools, t.label, t.title);
       if (t.menu) {
-        const m = makeSelect(b, t.menu.map(function (it) { return [it[0], it[1]]; }), { menu: true });
+        const m = Form.makeSelect(b, t.menu.map(function (it) { return [it[0], it[1]]; }), { menu: true });
         m.onChange = function () {
           const it = t.menu.find(function (i) { return i[0] === m.value; });
           if (it) it[2]();
@@ -3756,19 +4081,11 @@ const Settings = (function () {
       }
     });
 
-    const body = el("div", "hk-body", win);
-    SETTINGS_SCHEMA.forEach(function (sec) {
-      const box = el("div", "hk-sec" + (sec.closed ? " closed" : ""), body);
-      const h = el("div", "hk-sh", box, sec.title);
-      h.tabIndex = 0;
-      h.setAttribute("role", "button");
-      onActivate(h, function () { box.classList.toggle("closed"); });
-      const rows = el("div", "hk-rows", box);
-      sec.rows.forEach(function (row) {
-        const b = ROW_KINDS[row.kind](rows, row, sec);
-        if (row.tip) b.rowEl.title = row.tip;
-        bindings.push(b);
-      });
+    form = Form.build(el("div", "hk-body", win), SETTINGS_SCHEMA, {
+      get: function (path) { return getPath(S, path); },
+      set: commit,
+      status: status,
+      state: function () { return S; }
     });
 
     const foot = el("div", "hk-foot", win);
@@ -3842,23 +4159,29 @@ const Settings = (function () {
     isOpen = true;
     cfgBtn.classList.add("on");
     refresh();
+    PanelGears.show();
     if (!dragged) center();
     startMeter();
   }
   function close() {
-    if (closePop) closePop();
+    Form.closePopup();
     CodeBox.close();
     if (!isOpen) return;
     win.style.display = "none";
     isOpen = false;
     cfgBtn.classList.remove("on");
+    PanelGears.hide();
+    // a panel's window opened from here goes with it; the layout editor
+    // closes this window on entry and keeps its own
+    if (!LayoutEditor.isActive()) PanelSettings.close(true);
     fpsMeter = null;
   }
   function toggle() { if (isOpen) close(); else open(); }
   /** Escape peels one layer: a dropdown, then the code box, then the window. */
   function escape() {
-    if (closePop) closePop();
-    else if (CodeBox.isOpen()) CodeBox.close();
+    if (Form.closePopup()) return;
+    if (CodeBox.isOpen()) CodeBox.close();
+    else if (PanelSettings.isOpen()) PanelSettings.close();
     else close();
   }
   function status(msg) { if (statusEl) statusEl.textContent = "> " + msg; }
@@ -3961,7 +4284,7 @@ const Settings = (function () {
       });
     }
     async function open(m) {
-      if (closePop) closePop();
+      Form.closePopup();
       if (!modal) build();
       mode = m;
       const exp = m === "export";
@@ -4006,6 +4329,189 @@ const Settings = (function () {
 })();
 
 /* ---------------------------------------------------------------------
+   Panel settings window
+   ------------------------------------------------------------------ */
+
+/** Title-bar dragging for a window; `skip` is a control in the bar (its
+ *  close button) that must stay clickable. */
+function dragWindowBy(win, handle, skip) {
+  handle.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0 || e.target === skip) return;
+    e.preventDefault();
+    const r = win.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
+    function move(ev) {
+      const y = clamp(ev.clientY - oy, 0, Math.max(0, window.innerHeight - 40));
+      win.style.left = clamp(ev.clientX - ox, 0, Math.max(0, window.innerWidth - r.width)) + "px";
+      win.style.top = y + "px";
+      win.style.maxHeight = Math.max(120, window.innerHeight - y - 8) + "px";
+    }
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+
+/* One panel's own settings, in a window of their own. Opened from the
+   layout editor (click a panel, or its ⚙) or from the ⚙ buttons shown on
+   every panel while the settings window is open. */
+const PanelSettings = (function () {
+  let win = null, form = null, titleEl = null, statusEl = null, pid = 0;
+
+  function panelName(id) {
+    const p = dashboard.panels.instances.get(id);
+    return p && p.title ? p.title : "panel";
+  }
+  function currentLeaf() {
+    const hit = pid ? findParent(dashboard.panels.root, pid, null, -1) : null;
+    return hit ? hit.leaf : null;
+  }
+  function currentCfg() {
+    const l = currentLeaf();
+    return l ? panelConfig(l.p, l.s) : null;
+  }
+  /** Whatever shows panels over the wallpaper redraws its marks. */
+  function notify() {
+    LayoutEditor.refresh();
+    PanelGears.refresh();
+  }
+  function status(m) { if (statusEl) statusEl.textContent = "> " + m; }
+  function apply(leaf) {
+    dashboard.panels.instances.get(pid).configure(panelConfig(leaf.p, leaf.s));
+    requestDraw();
+    persistLater();
+    if (titleEl) titleEl.textContent = "┃ PANEL // " + panelName(pid);
+    notify();
+  }
+  function set(row, sec, v) {
+    // the first change freezes the default layout's jitter into a tree of its
+    // own — the setting has to live on a leaf somewhere
+    if (!S.layout) { S.layout = { root: cloneTree(dashboard.panels.currentTree()) }; APPLY.layout(); }
+    const leaf = currentLeaf();
+    if (!leaf) return;
+    const c = panelConfig(leaf.p, leaf.s);
+    setPath(c, row.path, v);
+    const d = diffState(c, panelDefaults(leaf.p));
+    if (d) leaf.s = d; else delete leaf.s;
+    apply(leaf);
+  }
+  function reset() {
+    const leaf = currentLeaf();
+    if (!leaf || !leaf.s) { status("already at its defaults"); return; }
+    delete leaf.s;
+    apply(leaf);
+    form.refresh();
+    status("panel reset");
+  }
+
+  function open(id) {
+    close(true);
+    pid = id;
+    const leaf = currentLeaf();
+    if (!leaf) { pid = 0; return; }
+    win = domEl("div", "hk-win hk-pset", document.body);
+    win.setAttribute("role", "dialog");
+    win.setAttribute("aria-label", "Panel settings");
+    const title = domEl("div", "hk-title", win);
+    titleEl = domEl("span", "t", title, "┃ PANEL // " + panelName(id));
+    domEl("span", "hk-dot", title);
+    const x = domEl("span", "hk-x", title, "✕");
+    x.title = "Close (Esc)";
+    x.addEventListener("click", function () { close(); });
+    dragWindowBy(win, title, x);
+    const tools = domEl("div", "hk-tools", win);
+    Form.onActivate(Form.mkButton(tools, "RESET PANEL", "Put this panel's settings back to their defaults"), reset);
+    Form.onActivate(Form.mkButton(tools, "CLOSE", "Close (Esc)"), function () { close(); });
+    form = Form.build(domEl("div", "hk-body", win), panelSections(leaf.p), {
+      get: function (path) { return getPath(currentCfg(), path); },
+      set: set,
+      status: status,
+      state: currentCfg
+    });
+    const foot = domEl("div", "hk-foot", win);
+    statusEl = domEl("span", "hk-status", foot, "> " + PANEL_TYPES[leaf.p].desc);
+    form.refresh();
+    // over its own panel: centred on it, level with its top, pushed back
+    // onto the screen where it would hang off an edge; below the bottom
+    // of the screen the window scrolls instead of growing
+    const r = dashboard.panels.leaves.find(function (l) { return l.node.id === id; }).r;
+    const w = win.offsetWidth, h = win.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const left = clamp(r.x + (r.w - w) / 2, 8, Math.max(8, vw - w - 8));
+    const top = clamp(r.y, 8, Math.max(8, vh - h - 8));
+    win.style.left = Math.round(left) + "px";
+    win.style.top = Math.round(top) + "px";
+    win.style.maxHeight = Math.round(vh - top - 8) + "px";
+    notify();
+  }
+  /** `quiet` skips telling the overlays — for callers that redraw anyway. */
+  function close(quiet) {
+    if (!win) return;
+    Form.closePopup();
+    win.remove();
+    win = form = titleEl = statusEl = null;
+    pid = 0;
+    if (!quiet) notify();
+  }
+  /** Pulls the window back in line after the layout changed under it —
+   *  or closes it when its panel is gone. */
+  function sync() {
+    if (!win) return;
+    if (!currentLeaf()) { close(true); return; }
+    titleEl.textContent = "┃ PANEL // " + panelName(pid);
+    form.refresh();
+  }
+
+  return {
+    open: open, close: close, sync: sync,
+    isOpen: function () { return !!win; },
+    id: function () { return pid; }
+  };
+})();
+
+/* ⚙ on every panel while the settings window is open — the way into a
+   panel's own settings without entering the layout editor. Small fixed
+   buttons in each panel's top-right corner; nothing else is covered, and
+   none of it exists while the settings window is closed. */
+const PanelGears = (function () {
+  let box = null;
+  function show() {
+    if (!box) box = domEl("div", "hk-gears", document.body);
+    refresh();
+  }
+  function hide() {
+    if (box) { box.remove(); box = null; }
+  }
+  function refresh() {
+    if (!box || !dashboard) return;
+    box.textContent = "";
+    // the CFG button lives in the top-right title bar too; a gear that
+    // would land on it moves to its left instead
+    const cfg = document.getElementById("hk-cfg").getBoundingClientRect();
+    const W = 24, H = TITLE_BAR_H;
+    dashboard.panels.leaves.forEach(function (l) {
+      const id = l.node.id, r = l.r;
+      let x = r.x + r.w - W;
+      const y = r.y;
+      if (x < cfg.right && x + W > cfg.left && y < cfg.bottom && y + H > cfg.top) x = cfg.left - W - 2;
+      const g = domEl("div", "hk-pg" + (PanelSettings.id() === id ? " sel" : ""), box, "⚙");
+      g.style.left = x + "px";
+      g.style.top = y + "px";
+      g.tabIndex = 0;
+      g.setAttribute("role", "button");
+      const p = dashboard.panels.instances.get(id);
+      g.title = "Settings of " + (p && p.title ? p.title : "this panel");
+      Form.onActivate(g, function () {
+        if (PanelSettings.id() === id) PanelSettings.close(); else PanelSettings.open(id);
+      });
+    });
+  }
+  return { show: show, hide: hide, refresh: refresh };
+})();
+
+/* ---------------------------------------------------------------------
    Layout editor
    ------------------------------------------------------------------ */
 
@@ -4013,8 +4519,9 @@ const Settings = (function () {
    another panel's edge to dock beside it, onto its middle to swap the two,
    or onto an edge of the screen to run it along that whole side. Drag a
    gap to resize; ✕ removes a panel; the list adds one — dragged into
-   place, or clicked to split the largest panel. Every edit lands in
-   S.layout and saves like any other setting.
+   place, or clicked to split the largest panel. Clicking a panel (or its
+   ⚙) opens that panel's own settings. Every edit lands in S.layout and
+   saves like any other setting.
 
    Nothing here exists outside edit mode: entering builds the overlay,
    leaving removes it. */
@@ -4044,9 +4551,22 @@ const LayoutEditor = (function () {
     requestDraw();
     persistLater();
   }
+  /* Undo steps back through the layout, not through panel settings: a
+     panel that is still there keeps the settings it has now. */
   function doUndo() {
     if (!undo.length) { status("nothing to undo"); return; }
-    S.layout = undo.pop();
+    const now = new Map();
+    forEachLeaf(dashboard.panels.root, function (l) { now.set(l.id, l); });
+    let back = undo.pop();
+    const carried = back ? back.root : cloneTree(dashboard.panels.defaultTree);
+    let any = false;
+    forEachLeaf(carried, function (l) {
+      const cur = now.get(l.id);
+      if (!cur || cur.p !== l.p) return;
+      if (cur.s) { l.s = cloneState(cur.s); any = true; } else delete l.s;
+    });
+    if (back || any) back = { root: carried };
+    S.layout = back;
     APPLY.layout();
     requestDraw();
     persistLater();
@@ -4054,6 +4574,7 @@ const LayoutEditor = (function () {
   }
   function resetLayout() {
     if (!S.layout) { status("layout is already the default"); return; }
+    PanelSettings.close(true);
     pushUndo();
     S.layout = null;
     APPLY.layout();
@@ -4150,7 +4671,7 @@ const LayoutEditor = (function () {
     }
     let leaf;
     if (d.kind === "move") {
-      leaf = { p: d.type, id: d.id };
+      leaf = findParent(root, d.id, null, -1).leaf;
       root = removeLeaf(root, d.id);
     } else {
       leaf = { p: d.type, id: nextLeafId(root) };
@@ -4184,6 +4705,7 @@ const LayoutEditor = (function () {
   }
   function removePanel(id) {
     const name = panelName(id);
+    if (id === PanelSettings.id()) PanelSettings.close(true);
     pushUndo();
     commit(removeLeaf(editable(), id));
     status("removed " + name);
@@ -4208,7 +4730,7 @@ const LayoutEditor = (function () {
     if (e.button !== 0 || drag) return;
     e.preventDefault();
     const before = snapshot();
-    // the first edit of the stock layout freezes its jitter into a tree of
+    // the first edit of the default layout freezes its jitter into a tree of
     // its own — the same shape, so splitter k is still the same gap
     if (!S.layout) { S.layout = { root: editable() }; APPLY.layout(); }
     const sp = dashboard.panels.splitters[k];
@@ -4283,7 +4805,7 @@ const LayoutEditor = (function () {
       render();
       return;
     }
-    if (!d.live) { if (d.kind === "add") autoAdd(d.type); else render(); return; }
+    if (!d.live) { if (d.kind === "add") autoAdd(d.type); else PanelSettings.open(d.id); return; }
     if (d.t) drop(d, d.t); else render();
   }
   /** Abandons a drag in progress, putting back anything it changed. */
@@ -4301,6 +4823,7 @@ const LayoutEditor = (function () {
 
   function render() {
     if (!active) return;
+    PanelSettings.sync();
     const old = lay.querySelectorAll(".hk-lp, .hk-sp, .hk-empty");
     for (let i = 0; i < old.length; i++) old[i].remove();
     const pm = dashboard.panels;
@@ -4309,6 +4832,7 @@ const LayoutEditor = (function () {
       const e = domEl("div", "hk-lp", lay);
       place(e, l.r);
       if (drag && drag.kind === "move" && drag.live && drag.id === id) e.classList.add("moving");
+      if (id === PanelSettings.id()) e.classList.add("sel");
       const c = domEl("div", "hk-lp-c", e);
       domEl("span", null, c, panelName(id));
       domEl("small", null, c, Math.round(l.r.w) + " × " + Math.round(l.r.h));
@@ -4316,7 +4840,11 @@ const LayoutEditor = (function () {
       x.title = "Remove from the layout";
       x.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
       x.addEventListener("click", function () { removePanel(id); });
-      e.title = "Drag to move — onto an edge to dock, the middle to swap";
+      const g = domEl("div", "hk-lp-g", e, "⚙");
+      g.title = "This panel's settings";
+      g.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+      g.addEventListener("click", function () { PanelSettings.open(id); });
+      e.title = "Drag to move — onto an edge to dock, the middle to swap. Click for its settings.";
       e.addEventListener("pointerdown", function (ev) {
         startDrag(ev, { kind: "move", id: id, type: l.node.p, label: panelName(id) });
       });
@@ -4353,7 +4881,7 @@ const LayoutEditor = (function () {
     const x = domEl("span", "hk-x", title, "✕");
     x.title = "Done (Esc)";
     x.addEventListener("click", exit);
-    dragWindow(pal, title, x);
+    dragWindowBy(pal, title, x);
 
     const tools = domEl("div", "hk-tools", pal);
     const mk = function (label, tip, fn) {
@@ -4365,13 +4893,14 @@ const LayoutEditor = (function () {
       });
     };
     mk("UNDO", "Undo the last change (Ctrl+Z)", doUndo);
-    mk("RESET", "Reset to the default layout", resetLayout);
+    mk("RESET", "Reset to the default layout, panel settings included", resetLayout);
     mk("DONE", "Leave the editor (Esc)", exit);
 
     const body = domEl("div", "hk-body", pal);
     domEl("div", "hk-note", body,
       "Drag a panel to move it: onto another panel's edge to dock beside it, onto its middle to swap, " +
-      "or onto the very edge of the screen to run along that side. Drag a gap to resize. ✕ removes.");
+      "or onto the very edge of the screen to run along that side. Drag a gap to resize. ✕ removes. " +
+      "Click a panel, or its ⚙, for its own settings.");
     domEl("div", "hk-sh hk-sh-flat", body, "ADD PANEL");
     domEl("div", "hk-note", body, "Drag one into place, or click it to split the largest panel.");
     items = PANEL_TYPE_KEYS.map(function (type) {
@@ -4400,25 +4929,6 @@ const LayoutEditor = (function () {
     pal.style.top = Math.round((window.innerHeight - h) / 2) + "px";
   }
 
-  /** Title-bar dragging for the palette window. */
-  function dragWindow(win, handle, skip) {
-    handle.addEventListener("pointerdown", function (e) {
-      if (e.button !== 0 || e.target === skip) return;
-      e.preventDefault();
-      const r = win.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
-      function move(ev) {
-        win.style.left = clamp(ev.clientX - ox, 0, Math.max(0, window.innerWidth - r.width)) + "px";
-        win.style.top = clamp(ev.clientY - oy, 0, Math.max(0, window.innerHeight - 40)) + "px";
-      }
-      function up() {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-      }
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
-    });
-  }
-
   /* ---- mode ---------------------------------------------------------------- */
 
   function enter() {
@@ -4437,6 +4947,7 @@ const LayoutEditor = (function () {
   function exit() {
     if (!active) return;
     if (drag) cancel();
+    PanelSettings.close(true);
     active = false;
     lay.remove(); pal.remove(); ghost.remove();
     lay = pal = ghost = dropEl = statusEl = null;
@@ -4447,10 +4958,17 @@ const LayoutEditor = (function () {
   /** Keys while editing; the global handler hands them all here. */
   function key(e) {
     const t = e.target;
-    const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
-    if (e.key === "Escape") { e.preventDefault(); if (drag) cancel(); else exit(); }
+    // a text field keeps its own keys — Ctrl+Z there undoes the typing
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (drag) cancel();
+      else if (Form.closePopup()) return;
+      else if (PanelSettings.isOpen()) PanelSettings.close();
+      else exit();
+    }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (!drag) doUndo(); }
-    else if (!typing && (e.key === "l" || e.key === "L")) exit();
+    else if (e.key === "l" || e.key === "L") exit();
   }
 
   return {
@@ -4468,6 +4986,7 @@ function onResize() {
   if (!dashboard) return;
   dashboard.resized();
   LayoutEditor.refresh();
+  PanelGears.refresh();
 }
 
 // Precedence: a link's ?config= (decoded asynchronously, below), then this

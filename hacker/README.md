@@ -43,7 +43,7 @@ while the setting keeps the exact value.
 
 | Section | Settings |
 | --- | --- |
-| LAYOUT | **Edit layout** (also **L**) — see Layout below. |
+| LAYOUT | **Layout & panels** (also **L**) — see Layout and Panel settings below. |
 | CRT // OVERLAY | Scanlines and their drift speed, refresh band and its speed, flicker, glitch-bar frequency, vignette. Strengths are relative to the original look (100%); 0 switches an effect off and skips its draw. |
 | ANIMATION | Master speed — scales everything that moves. 0 freezes the screen, and a frozen screen is not redrawn at all. |
 | PERFORMANCE | FPS cap (0 = uncapped), pixel-ratio cap, and **Override WE FPS limit** (see Performance). |
@@ -91,7 +91,7 @@ existed.
 
 ## Layout
 
-**Edit layout** (in settings, or **L**) puts the editor over the live
+**Layout & panels** (in settings, or **L**) puts the editor over the live
 wallpaper, Visual Studio-style:
 
 - **Move** — drag a panel. Drop it on another panel's edge to dock beside it
@@ -116,7 +116,7 @@ children side by side or stacked (`{ d: "h" | "v", c: [...], f: [fractions] }`),
 and the tree is kept as simple as it can be — a one-child split collapses, a
 split inside one running the same way is folded into it. It lives in
 `S.layout` and is saved and shared like every other setting; `null` means the
-stock layout, which keeps its per-load jitter until the first edit freezes it.
+default layout, which keeps its per-load jitter until the first edit freezes it.
 Loaded layouts are rebuilt from scratch (`validateTree`): unknown panel types
 and malformed splits are dropped and duplicate ids renumbered.
 
@@ -126,13 +126,54 @@ freed straight away. Panel kinds and their minimum sizes are declared in
 `PANEL_TYPES`.
 
 Cost scales with what is on screen, roughly with the number of panels: the
-stock layout costs what it always did, and about thirty panels measured
+default layout costs what it always did, and about thirty panels measured
 around 0.95 ms/frame at 1080p. The editor itself is DOM that exists only
 while it is open.
 
+## Panel settings
+
+Each panel has a settings window of its own. While the settings window is
+open, every panel shows a ⚙ in its title bar — click it (again to close);
+in the layout editor, click a panel or its ⚙. Esc closes it, and closing the
+settings window takes it along. Every panel has:
+
+| Setting | What it does |
+| --- | --- |
+| Title | Blank keeps the panel's own title. |
+| Accent colour | Frame, title and cursor colour. |
+| Title bar | Off gives the content the whole panel. |
+| Text size | 60–250%. Larger text shows fewer lines, and costs less. |
+| Speed | On top of master speed; 0 freezes just this panel. |
+
+And by type:
+
+| Panel | Settings |
+| --- | --- |
+| SYS://TRACE | Feed (system log or event feed), how often lines are errors and warnings |
+| MEMORY INSPECTOR | How often a row is highlighted |
+| SOURCE SYNTH | Thinking pauses on or off |
+| TARGET ACQUISITION | Company logos, or monograms only |
+| TTY | Prompt user and host (anyone but root gets a `$` prompt; a blank host is made up per terminal), and which commands it runs — with none ticked it runs them all |
+| TELEMETRY | Number of charts (1–4) and counters (0–6); charts side by side, stacked, or chosen from the panel's shape |
+| TASK PIPELINE | Number of bars (1–12), how often tasks fail, how often they loop forever |
+| RAW STREAM | How often a run is highlighted |
+
+Settings belong to the panel, not to its place: they move and swap with it,
+and two panels of the same type have their own. A leaf stores only what
+differs from its type's defaults, in `s`, so they save and share with the
+layout. Undo steps back through the layout but leaves panel settings as they
+are; **RESET PANEL** puts one panel back, and the layout's **RESET** puts
+back everything, panel settings included. Editing a panel of the default
+layout freezes the default layout's per-load jitter, as any edit does.
+
+The rows are declared like the main settings: `PANEL_COMMON_ROWS` and
+`PANEL_ROWS` in the same row format, each with its default in `def`. A
+panel class applies them in `configure(cfg)`, which runs after construction
+and on every change. Both windows are built by the same `Form` code.
+
 ## What is on screen
 
-The stock layout is eight panels in a three-column grid whose split fractions
+The default layout is eight panels in a three-column grid whose split fractions
 are jittered a little on every load, so no two launches have quite the same
 geometry. The layout can be rearranged freely — see Layout.
 
@@ -178,7 +219,8 @@ either append a line or replace the previous one, which is how `wget`,
 `docker pull`, `git clone`, `rsync` and the invented `synctl` draw their
 in-place progress. All hosts live under invented internal domains
 (`mesh.internal`, `synapse.grid`, `lattice.local`) — nothing resolvable.
-New commands go in `buildShellDeck()`.
+New commands go in `SHELL_COMMANDS`, which is also the list a TTY panel's
+settings offer.
 
 Commands: `ping`, `wget`, `docker pull`, `apt-get install`, `git clone`,
 `make`, `ls -la`, `df -h`, `dd`, `grep -rn`, `journalctl`, `tar -xvzf`,
