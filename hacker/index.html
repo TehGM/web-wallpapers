@@ -137,6 +137,41 @@
   .hk-opt.sel{ color:var(--hk-g); }
   .hk-opt.sel::before{ content:"> "; }
 
+  /* Colour row and picker. The picker's contents are zoomed with the
+     settings windows; the popup itself keeps screen pixels for placing. */
+  .hk-csw{
+    display:flex; align-items:center; gap:8px; padding:2px 6px; cursor:pointer;
+    border:1px solid rgba(60,255,122,.35); background:rgba(60,255,122,.05); color:var(--hk-w);
+  }
+  .hk-csw:hover, .hk-csw:focus-visible{ background:rgba(60,255,122,.14); outline:none; }
+  .hk-cchip{ flex:none; width:14px; height:14px; border:1px solid rgba(216,255,232,.35); }
+  .hk-cpop{
+    position:fixed; z-index:40; background:#070D10; border:1px solid rgba(60,255,122,.6);
+    box-shadow:0 8px 24px rgba(0,0,0,.6);
+  }
+  .hk-cin{ zoom:var(--hk-u); width:180px; padding:8px; color:var(--hk-w); font:11px/1.35 var(--hk-mono); }
+  .hk-cpre{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+  .hk-cp{ width:16px; height:16px; cursor:pointer; border:1px solid rgba(216,255,232,.25); box-sizing:border-box; }
+  .hk-cp.def{
+    width:auto; padding:0 5px; background:transparent; color:var(--hk-l);
+    border-color:rgba(60,255,122,.35); font-size:10px; line-height:14px;
+  }
+  .hk-cp.on{ outline:1px solid var(--hk-w); outline-offset:1px; }
+  .hk-cp:hover{ border-color:var(--hk-w); }
+  .hk-sv{ position:relative; height:110px; cursor:crosshair; touch-action:none; }
+  .hk-hue{ position:relative; height:12px; margin-top:8px; cursor:ew-resize; touch-action:none; }
+  .hk-sv canvas, .hk-hue canvas{ display:block; width:100%; height:100%; }
+  .hk-mark{
+    position:absolute; width:8px; height:8px; margin:-6px 0 0 -6px; border:2px solid #fff;
+    border-radius:50%; box-shadow:0 0 2px #000; pointer-events:none;
+  }
+  .hk-hmark{
+    position:absolute; top:-2px; bottom:-2px; width:2px; margin-left:-2px;
+    border:1px solid #fff; box-shadow:0 0 2px #000; pointer-events:none;
+  }
+  .hk-cfoot{ display:flex; align-items:center; gap:6px; margin-top:8px; }
+  .hk-cfoot .hk-text{ flex:1; }
+
   .hk-foot{
     flex:none; display:flex; gap:8px; padding:3px 8px; font-size:10px;
     border-top:1px solid var(--hk-line); color:var(--hk-gr);
@@ -332,6 +367,18 @@ function mkColor(hex) {
   const n = parseInt(hex.slice(1), 16);
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
   return { r, g, b, css: "rgb(" + r + "," + g + "," + b + ")", _c: new Array(65) };
+}
+/** "#rrggbb" of a theme colour. */
+function colorHex(c) {
+  return "#" + ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1);
+}
+/* A setting's colour as a theme colour object, made once per distinct value
+   so its fade() cache survives the panel being reconfigured. */
+const _colorCache = new Map();
+function colorOf(hex) {
+  let c = _colorCache.get(hex);
+  if (!c) { c = mkColor(hex); _colorCache.set(hex, c); }
+  return c;
 }
 function fade(c, a) {
   let q = (a * 64) | 0;
@@ -1019,7 +1066,7 @@ class Panel {
     this.tb = TITLE_BAR_H * this.tbk;
     this.speed = c.speed;
     this.showTitle = c.titleBar;
-    this.accent = PANEL_ACCENTS[c.accent] || this._baseAccent;
+    this.accent = c.accent === "default" ? this._baseAccent : colorOf(c.accent);
     this.title = c.title || this.defaultTitle();
     this._glowQ = -1;
     this.layer.invalidate();
@@ -3739,6 +3786,9 @@ function sanitizeRows(o, rows, defaults) {
       // saved value is not cut down for a screen it was not set on
       const c = clamp(v, row.min, typeof row.max === "function" ? Infinity : row.max);
       setPath(o, row.path, row.unit && row.unit.int ? Math.round(c) : c);
+    } else if (row.kind === "color") {
+      const ok = (row.allowDefault && v === "default") || /^#[0-9a-f]{6}$/i.test(v);
+      setPath(o, row.path, ok ? v.toLowerCase() : getPath(defaults, row.path));
     } else if (row.kind === "select" && !row.options.some(function (x) { return x[0] === v; })) {
       setPath(o, row.path, getPath(defaults, row.path));
     } else if (row.kind === "text" && v.length > (row.max || 40)) {
@@ -3770,19 +3820,21 @@ function sanitizeState(s) {
    row's default in `def`. A layout leaf stores only what differs from
    those defaults, in leaf.s; panelConfig() merges them back. */
 
-const PANEL_ACCENTS = {
-  green: T.Green, cyan: T.Cyan, blue: T.Blue, orange: T.Orange,
-  red: T.Red, white: T.White, gray: T.Gray
-};
+/* The wallpaper's own palette, offered as one-click swatches in every
+   colour picker. */
+const COLOR_PRESETS = [
+  [colorHex(T.Green), "green"], [colorHex(T.DimGreen), "dim green"], [colorHex(T.Cyan), "cyan"],
+  [colorHex(T.Blue), "blue"], [colorHex(T.Orange), "amber"], [colorHex(T.Red), "red"],
+  [colorHex(T.White), "white"], [colorHex(T.Gray), "gray"]
+];
 const U_INT = { scale: 1, dp: 0, suffix: "", int: true };
 
 const PANEL_COMMON_ROWS = [
   { kind: "text", label: "Title", path: "title", def: "", max: 48, placeholder: "default",
     tip: "Left blank, the panel keeps its own title." },
-  { kind: "select", label: "Accent colour", path: "accent", def: "default",
-    options: [["default", "default"], ["green", "green"], ["cyan", "cyan"], ["blue", "blue"],
-              ["orange", "amber"], ["red", "red"], ["white", "white"], ["gray", "gray"]],
-    tip: "Colour of the panel's frame, title and cursor." },
+  { kind: "color", label: "Accent colour", path: "accent", def: "default", allowDefault: true,
+    presets: COLOR_PRESETS,
+    tip: "Colour of the panel's frame, title and cursor. Default is the panel's own." },
   { kind: "check", label: "Title bar", path: "titleBar", def: true },
   { kind: "range", label: "Text size", path: "text", def: 1, min: 0.6, max: 2.5, step: 0.05, unit: U_PCT,
     tip: "Size of this panel's text, on top of the global text size in the main settings. " +
@@ -4128,6 +4180,24 @@ const Form = (function () {
         if (document.activeElement !== inp) inp.value = ctx.get(row.path);
       }};
     },
+    /* A swatch that opens the colour picker. The value is "#rrggbb", or
+       "default" where the row allows it (allowDefault). */
+    color: function (parent, row, sec, ctx) {
+      const r = el("div", "hk-row", parent);
+      el("div", "hk-lab", r, row.label);
+      const sw = el("div", "hk-csw", r);
+      sw.tabIndex = 0;
+      sw.setAttribute("role", "button");
+      sw.setAttribute("aria-label", row.label);
+      const chip = el("span", "hk-cchip", sw);
+      const txt = el("span", null, sw);
+      onActivate(sw, function () { colorPicker(sw, row, sec, ctx); });
+      return { row: row, rowEl: r, input: sw, sync: function () {
+        const v = ctx.get(row.path);
+        chip.style.background = v === "default" ? ctx.colorDefault() : v;
+        txt.textContent = v === "default" ? "default" : v.toUpperCase();
+      }};
+    },
     note: function (parent, row) {
       return { row: row, rowEl: el("div", "hk-note", parent, row.label), input: null, sync: null };
     },
@@ -4236,6 +4306,187 @@ const Form = (function () {
     return api;
   }
 
+  /* ---- colour picker -------------------------------------------------
+     Saturation/brightness square, hue bar, hex field, and the palette as
+     one-click swatches. A popup on body like the dropdown's list, closed by
+     an outside click, Escape (handled globally) or the panel scrolling.
+     Every change applies live. */
+  function hexToHsv(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: h * 60, s: mx ? d / mx : 0, v: mx };
+  }
+  function hsvToHex(h, s, v) {
+    const f = function (n) {
+      const k = (n + h / 60) % 6;
+      return Math.round(255 * (v - v * s * Math.max(0, Math.min(k, 4 - k, 1))));
+    };
+    return "#" + ((1 << 24) + (f(5) << 16) + (f(3) << 8) + f(1)).toString(16).slice(1);
+  }
+  function parseHex(t) {
+    t = t.trim().replace(/^#/, "").toLowerCase();
+    if (/^[0-9a-f]{3}$/.test(t)) t = t[0] + t[0] + t[1] + t[1] + t[2] + t[2];
+    return /^[0-9a-f]{6}$/.test(t) ? "#" + t : null;
+  }
+
+  function colorPicker(trg, row, sec, ctx) {
+    if (closePop) closePop();
+    const pop = el("div", "hk-cpop", document.body);
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", row.label);
+    const box = el("div", "hk-cin", pop);   // zoomed with the settings windows
+
+    const value = function () { return ctx.get(row.path); };
+    const shown = function () { const v = value(); return v === "default" ? ctx.colorDefault() : v; };
+    let hsv = hexToHsv(shown());
+
+    const pre = el("div", "hk-cpre", box);
+    const chips = [];
+    if (row.allowDefault) {
+      const d = el("div", "hk-cp def", pre, "default");
+      d.title = "The default colour";
+      d.addEventListener("click", function () { commit("default"); });
+      chips.push([d, "default"]);
+    }
+    (row.presets || []).forEach(function (p) {
+      const c = el("div", "hk-cp", pre);
+      c.style.background = p[0];
+      c.title = p[1];
+      c.addEventListener("click", function () { commit(p[0]); });
+      chips.push([c, p[0]]);
+    });
+
+    const sv = el("div", "hk-sv", box);
+    const svc = el("canvas", null, sv);
+    svc.width = 180; svc.height = 110;
+    const svm = el("div", "hk-mark", sv);
+    const hue = el("div", "hk-hue", box);
+    const huc = el("canvas", null, hue);
+    huc.width = 180; huc.height = 1;
+    const hum = el("div", "hk-hmark", hue);
+    const foot = el("div", "hk-cfoot", box);
+    const prev = el("span", "hk-cchip", foot);
+    const hexIn = el("input", "hk-text", foot);
+    hexIn.type = "text";
+    hexIn.spellcheck = false;
+    hexIn.maxLength = 7;
+    hexIn.setAttribute("aria-label", row.label + " hex");
+
+    (function () {
+      const hx = huc.getContext("2d"), g = hx.createLinearGradient(0, 0, 180, 0);
+      for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, hsvToHex(i * 60, 1, 1));
+      hx.fillStyle = g;
+      hx.fillRect(0, 0, 180, 1);
+    })();
+    function drawSV() {
+      const x = svc.getContext("2d");
+      x.fillStyle = hsvToHex(hsv.h, 1, 1);
+      x.fillRect(0, 0, 180, 110);
+      const w = x.createLinearGradient(0, 0, 180, 0);
+      w.addColorStop(0, "#fff"); w.addColorStop(1, "rgba(255,255,255,0)");
+      x.fillStyle = w; x.fillRect(0, 0, 180, 110);
+      const k = x.createLinearGradient(0, 0, 0, 110);
+      k.addColorStop(0, "rgba(0,0,0,0)"); k.addColorStop(1, "#000");
+      x.fillStyle = k; x.fillRect(0, 0, 180, 110);
+    }
+    function show() {
+      const v = value(), hex = shown();
+      svm.style.left = (hsv.s * 100) + "%";
+      svm.style.top = ((1 - hsv.v) * 100) + "%";
+      hum.style.left = (hsv.h / 360 * 100) + "%";
+      prev.style.background = hex;
+      if (document.activeElement !== hexIn) hexIn.value = hex.toUpperCase();
+      chips.forEach(function (c) { c[0].classList.toggle("on", c[1] === v); });
+    }
+    function commit(v) {
+      ctx.set(row, sec, v);
+      const h = hsv.h;
+      hsv = hexToHsv(shown());
+      // greys have no hue of their own; keep the bar where it was
+      if (hsv.s === 0 || hsv.v === 0) hsv.h = h;
+      drawSV();
+      show();
+    }
+    /* Drags measured against the element's on-screen rect, which already
+       includes the window zoom — no arithmetic for the scale needed. */
+    function dragOn(elm, fn) {
+      elm.addEventListener("pointerdown", function (e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        elm.setPointerCapture(e.pointerId);
+        const at = function (ev) {
+          const b = elm.getBoundingClientRect();
+          fn(clamp((ev.clientX - b.left) / b.width, 0, 1), clamp((ev.clientY - b.top) / b.height, 0, 1));
+        };
+        at(e);
+        const up = function () {
+          elm.removeEventListener("pointermove", at);
+          elm.removeEventListener("pointerup", up);
+          elm.removeEventListener("pointercancel", up);
+        };
+        elm.addEventListener("pointermove", at);
+        elm.addEventListener("pointerup", up);
+        elm.addEventListener("pointercancel", up);
+      });
+    }
+    dragOn(sv, function (fx, fy) {
+      hsv.s = fx; hsv.v = 1 - fy;
+      ctx.set(row, sec, hsvToHex(hsv.h, hsv.s, hsv.v));
+      show();
+    });
+    dragOn(hue, function (fx) {
+      hsv.h = fx * 360;
+      drawSV();
+      ctx.set(row, sec, hsvToHex(hsv.h, hsv.s, hsv.v));
+      show();
+    });
+    function applyHex() {
+      const hex = parseHex(hexIn.value);
+      if (hex) commit(hex); else { hexIn.value = shown().toUpperCase(); ctx.status("not a colour: use #RRGGBB"); }
+    }
+    hexIn.addEventListener("change", applyHex);
+    hexIn.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); applyHex(); hexIn.blur(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); trg.focus(); }
+    });
+
+    drawSV();
+    show();
+
+    // below the swatch, or above it near the bottom of the screen
+    const r = trg.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let top = r.bottom + 3;
+    if (top + ph > window.innerHeight - 4) {
+      const above = r.top - 3 - ph;
+      top = above >= 4 ? above : Math.max(4, window.innerHeight - 4 - ph);
+    }
+    pop.style.top = top + "px";
+    pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 4 - pw)) + "px";
+
+    function onOutside(e) {
+      if (!pop.contains(e.target) && e.target !== trg && !trg.contains(e.target)) close();
+    }
+    function close() {
+      if (closePop !== close) return;
+      pop.remove();
+      closePop = null;
+      window.removeEventListener("mousedown", onOutside, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", onScroll, true);
+    }
+    // scrolling the settings window would leave the popup behind; its own
+    // contents never scroll, so any scroll outside it closes it
+    function onScroll(e) { if (!pop.contains(e.target)) close(); }
+    closePop = close;
+    window.addEventListener("mousedown", onOutside, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", onScroll, true);
+  }
+
   /** Builds `sections` into `body`. Returns { refresh() }, which pulls
    *  every control back in line with the state. */
   function build(body, sections, ctx) {
@@ -4255,6 +4506,7 @@ const Form = (function () {
     }
     const rowCtx = {
       get: ctx.get, status: ctx.status, state: ctx.state, refresh: refreshAll,
+      colorDefault: ctx.colorDefault || function () { return colorHex(T.Green); },
       // a change can move other values (the background rules do), so every
       // control is pulled back in line, not just the one that changed
       set: function (row, sec, v) { ctx.set(row, sec, v); refreshAll(); }
@@ -4713,7 +4965,12 @@ const PanelSettings = (function () {
       get: function (path) { return getPath(currentCfg(), path); },
       set: set,
       status: status,
-      state: currentCfg
+      state: currentCfg,
+      // what "default" is for this panel's colours: its own accent
+      colorDefault: function () {
+        const p = dashboard.panels.instances.get(pid);
+        return p && p._baseAccent ? colorHex(p._baseAccent) : colorHex(T.Green);
+      }
     });
     const foot = domEl("div", "hk-foot", win);
     statusEl = domEl("span", "hk-status", foot, "> " + PANEL_TYPES[leaf.p].desc);

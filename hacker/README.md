@@ -145,7 +145,7 @@ settings window takes it along. Every panel has:
 | Setting | What it does |
 | --- | --- |
 | Title | Blank keeps the panel's own title. |
-| Accent colour | Frame, title and cursor colour. |
+| Accent colour | Frame, title and cursor colour, from a colour picker: saturation/brightness square, hue bar, hex field (`#RRGGBB` or `#RGB`), and the wallpaper's palette plus **default** (the panel's own colour) one click away. |
 | Title bar | Off gives the content the whole panel. |
 | Text size | 60–250%, multiplied by the global text size. Scales the content only — title bars follow the global size, so they all stay level. Larger text shows fewer lines, and costs less. |
 | Speed | On top of master speed; 0 freezes just this panel. |
