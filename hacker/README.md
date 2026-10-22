@@ -45,6 +45,8 @@ while the setting keeps the exact value.
 | --- | --- |
 | LAYOUT | **Layout & panels** (also **L**) — see Layout and Panel settings below. |
 | APPEARANCE | Text size — every panel's text, multiplying each panel's own text size (60–250%). Title bars scale with it, and so does everything sitting in them: the CFG button, the panel ⚙ buttons, the layout editor's ⚙ and ✕. |
+| | Border glow — strength of the soft glow around every panel's frame, 0–300%, multiplying each panel's own; 0 leaves a plain line. |
+| | Border pulse — how fast that glow breathes and the title-bar dots blink, 0–4x, multiplying each panel's own; 0 holds them still. Each breathing step repaints the panel's cached frame, so this is a cost knob too — measured at 1080p: steady 0.25 ms/frame, default 0.30, 4x 0.59. |
 | | Settings windows — size of every settings window (this one, each panel's, the layout editor's, the scene-code box), 75–200%. Affects nothing else; applies when the slider is released. |
 | BACKGROUND | **Current** — the background on screen now, chosen from the list (picking one that is not ticked ticks it); **Opacity**, as a multiple of each image's own tuned level; **Change every** — off, or 5 s to once a day (typed: `90`, `5m`, `1h30m`), counted in real time; and which backgrounds to pick from, **No background** among them. |
 | CRT // OVERLAY | Scanlines and their drift speed, refresh band and its speed, flicker, glitch-bar frequency, vignette. Strengths are relative to the original look (100%); 0 switches an effect off and skips its draw. |
@@ -147,6 +149,8 @@ settings window takes it along. Every panel has:
 | Title bar | Off gives the content the whole panel. |
 | Text size | 60–250%, multiplied by the global text size. Scales the content only — title bars follow the global size, so they all stay level. Larger text shows fewer lines, and costs less. |
 | Speed | On top of master speed; 0 freezes just this panel. |
+| Border glow | 0–300%, multiplied by the global border glow. |
+| Border pulse | 0–4x, multiplied by the global border pulse; 0 holds this panel's border and dot still, and spares it the repaints. |
 
 And by type:
 

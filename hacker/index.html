@@ -655,7 +655,8 @@ const DEFAULTS = {
   ui:   { button: "dim" },
   // multiplies every panel's own text size
   // ui scales every settings window, and nothing else
-  look: { text: 1, ui: 1 },
+  // glow scales the soft border stroke, pulse the speed it breathes at
+  look: { text: 1, ui: 1, glow: 1, pulse: 1 },
   // which backgrounds may be picked (all the images, not "none"), how often
   // to pick another in seconds (0 = only on load), and opacity as a
   // multiple of each image's own tuned opacity
@@ -977,6 +978,7 @@ class Panel {
     // Per-panel settings (see configure): text scale, speed, title bar.
     this.ts = 1; this.speed = 1; this.showTitle = true;
     this.tbk = 1; this.tb = TITLE_BAR_H;     // title-bar scale and height
+    this.glowK = 1; this.pulseK = 1;         // own border glow and pulse
     this._baseTitle = null; this._baseAccent = null;
     /* One cached bitmap per panel, holding the frame, the title bar and
        whatever part of the content is not changing this frame. Bound once:
@@ -1001,6 +1003,8 @@ class Panel {
   configure(c) {
     if (this._baseAccent === null) { this._baseAccent = this.accent; this._baseTitle = this.title; }
     this.ts = c.text * S.look.text;
+    this.glowK = c.glow;
+    this.pulseK = c.pulse;
     // the title bar follows the global text size only, so every bar on
     // screen stays the same height
     this.tbk = S.look.text;
@@ -1014,14 +1018,23 @@ class Panel {
   }
   defaultTitle() { return this._baseTitle; }
   update(dt) {
-    this._pulse += dt * 1.5;
+    this._pulse += dt * 1.5 * this.pulseRate();
     // fade() quantises alpha to 1/64, so the border glow only changes
     // colour about five times a second however smoothly its sine moves.
     // Repainting on those steps alone keeps the frame animated without
-    // making the cache useless.
-    const q = ((0.35 + 0.15 * Math.sin(this._pulse)) * 0.5 * 64) | 0;
+    // making the cache useless — and with the pulse off it never changes,
+    // so it never repaints for it at all.
+    const q = (this.glowAlpha() * 64) | 0;
     if (q !== this._glowQ) { this._glowQ = q; this.layer.invalidate(); }
   }
+  /** Alpha of the soft outer border stroke: a slow breathing sine around
+   *  0.35, held still when the pulse is off, scaled by the glow setting. */
+  glowAlpha() {
+    const breathe = this.pulseRate() > 0 ? 0.15 * Math.sin(this._pulse) : 0;
+    return (0.35 + breathe) * 0.5 * S.look.glow * this.glowK;
+  }
+  /** Pulse speed: the global setting times this panel's own. */
+  pulseRate() { return S.look.pulse * this.pulseK; }
   /** The panel frame is filled once and stroked twice every frame, and the
    *  title bar filled once. Rebuilding those rounded rects each time — four
    *  path constructions per panel per frame, eight panels — was most of
@@ -1049,10 +1062,12 @@ class Panel {
 
     // Neon border: soft outer glow stroke + crisp inner stroke. One path,
     // built per layout rather than three times per frame.
-    const glow = 0.35 + 0.15 * Math.sin(this._pulse);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = fade(this.accent, glow * 0.5);
-    ctx.stroke(this._framePath);
+    const glow = this.glowAlpha();
+    if (glow * 64 >= 1) {                 // below one fade() step it is invisible
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = fade(this.accent, glow);
+      ctx.stroke(this._framePath);
+    }
     ctx.lineWidth = 1;
     ctx.strokeStyle = fade(this.accent, 0.9);
     ctx.stroke(this._framePath);
@@ -1095,7 +1110,7 @@ class Panel {
     // The title dot blinks about six times a second — too fast to be worth
     // a repaint of the panel, and one arc is cheaper than one anyway.
     if (this.showTitle) {
-      const dotA = 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2));
+      const dotA = this.pulseRate() > 0 ? 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2)) : 0.85;
       ctx.fillStyle = fade(this.accent, dotA);
       ctx.beginPath();
       const k = this.tbk;
@@ -3517,6 +3532,7 @@ class Dashboard {
 const U_PCT = { scale: 100, dp: 0, suffix: "%", zero: "off" };
 const U_MUL = { scale: 1, dp: 2, suffix: "x", zero: "stopped" };
 const U_SPEED = { scale: 1, dp: 2, suffix: "x", zero: "frozen" };
+const U_PULSE = { scale: 1, dp: 2, suffix: "x", zero: "steady" };
 const U_FPS = { scale: 1, dp: 0, suffix: "", zero: "uncapped", int: true };
 const U_NUM2 = { scale: 1, dp: 2, suffix: "" };
 
@@ -3589,6 +3605,14 @@ const SETTINGS_SCHEMA = [
     { kind: "range", label: "Text size", path: "look.text", min: 0.6, max: 2.5, step: 0.05, unit: U_PCT,
       tip: "Size of the text on every panel, title bars included, on top of each panel's own " +
            "text size. Larger text shows fewer lines, and costs less." },
+    { kind: "range", label: "Border glow", path: "look.glow", min: 0, max: 3, step: 0.05, unit: U_PCT, apply: "glow",
+      tip: "Strength of the soft glow around every panel's frame, on top of each panel's own " +
+           "border glow. 0 leaves a plain line." },
+    { kind: "range", label: "Border pulse", path: "look.pulse", min: 0, max: 4, step: 0.05, unit: U_PULSE, apply: "glow",
+      tip: "How fast the border glow breathes and the title-bar dot blinks, on top of each panel's " +
+           "own border pulse. Every step of the " +
+           "breathing repaints the panel's frame, so 0 (steady) is the cheapest, and 4x roughly " +
+           "doubles the wallpaper's frame cost." },
     { kind: "range", label: "Settings windows", path: "look.ui", min: 0.75, max: 2, step: 0.05, unit: U_PCT,
       live: false, apply: "uiScale",
       tip: "Size of the settings windows — this one, each panel's, and the layout editor's. " +
@@ -3721,7 +3745,12 @@ const PANEL_COMMON_ROWS = [
          "Its title bar follows the global size only, so all title bars stay level. " +
          "Larger text shows fewer lines, and costs less." },
   { kind: "range", label: "Speed", path: "speed", def: 1, min: 0, max: 3, step: 0.05, unit: U_SPEED,
-    tip: "How fast this panel runs, on top of master speed. 0 freezes it." }
+    tip: "How fast this panel runs, on top of master speed. 0 freezes it." },
+  { kind: "range", label: "Border glow", path: "glow", def: 1, min: 0, max: 3, step: 0.05, unit: U_PCT,
+    tip: "Strength of this panel's border glow, on top of the global border glow. 0 leaves a plain line." },
+  { kind: "range", label: "Border pulse", path: "pulse", def: 1, min: 0, max: 4, step: 0.05, unit: U_PULSE,
+    tip: "How fast this panel's border breathes and its dot blinks, on top of the global border pulse. " +
+         "0 holds them still, and spares this panel repainting for it." }
 ];
 
 const PANEL_ROWS = {
@@ -3838,6 +3867,8 @@ const APPLY = {
     if (forced) Settings.status("no background left ticked — current is now No background");
     Settings.refresh();
   },
+  // the glow is baked into each panel's cached frame
+  glow: function () { if (dashboard) dashboard.panels.invalidateAll(); },
   uiScale: function () {
     document.documentElement.style.setProperty("--hk-u", String(S.look.ui));
     Settings.fit();
