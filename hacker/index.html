@@ -21,14 +21,17 @@
     /* title-bar scale: the global text size, set by APPLY.look. Everything
        that sits in a panel's title bar is sized from it. */
     --hk-k:1;
+    /* top and right layout insets, set by APPLY.space — the CFG button
+       sits in the top-right panel's title bar, wherever that ends up */
+    --hk-it:8px; --hk-ir:8px;
     /* settings-window scale, set by APPLY.uiScale */
     --hk-u:1;
     --hk-tb:calc(18px * var(--hk-k));
   }
   /* Sits in the title bar of whichever panel holds the top-right corner,
-     left of its status dot: top = layout margin, height = the title bar's. */
+     left of its status dot: top = the top inset, height = the title bar's. */
   .hk-cfg{
-    position:fixed; top:8px; right:calc(8px + 16px * var(--hk-k)); z-index:10;
+    position:fixed; top:var(--hk-it); right:calc(var(--hk-ir) + 16px * var(--hk-k)); z-index:10;
     height:var(--hk-tb); padding:0 calc(8px * var(--hk-k));
     font:700 calc(12px * var(--hk-k))/var(--hk-tb) var(--hk-mono); color:var(--hk-gr); cursor:pointer;
     user-select:none; opacity:.7; transition:opacity .2s, color .2s;
@@ -655,6 +658,8 @@ const DEFAULTS = {
   ui:   { button: "dim" },
   // multiplies every panel's own text size
   // ui scales every settings window, and nothing else
+  // screen insets around the layout, and the gap between panels, in CSS px
+  space: { top: 8, right: 8, bottom: 8, left: 8, gap: 6 },
   // glow scales the soft border stroke, pulse the speed it breathes at
   look: { text: 1, ui: 1, glow: 1, pulse: 1 },
   // which backgrounds may be picked (all the images, not "none"), how often
@@ -3073,7 +3078,15 @@ const PANEL_TYPES = {
                make: function () { return new BinaryPanel(); } }
 };
 const PANEL_TYPE_KEYS = Object.keys(PANEL_TYPES);
-const LAYOUT_GAP = 6, LAYOUT_MARGIN = 8;
+/** The gap between panels, in CSS px (a setting). */
+function layoutGap() { return S.space.gap; }
+/** The rect panels are laid out in: the screen less its insets, in CSS
+ *  px. However large the insets, a sliver of it stays on screen. */
+function layoutArea(width, height) {
+  const sp = S.space;
+  const l = Math.min(sp.left, width - 40), t = Math.min(sp.top, height - 40);
+  return { x: l, y: t, w: Math.max(40, width - l - sp.right), h: Math.max(40, height - t - sp.bottom) };
+}
 
 /* A layout is a tree. A leaf is a panel, { p: type, id, s? }; a split lays its
    children side by side ("h") or stacked ("v"), { d, c: [children],
@@ -3189,7 +3202,7 @@ function minSize(n) {
     if (n.d === "h") { w += m[0]; h = Math.max(h, m[1]); }
     else { h += m[1]; w = Math.max(w, m[0]); }
   }
-  const gaps = (n.c.length - 1) * LAYOUT_GAP;
+  const gaps = (n.c.length - 1) * layoutGap();
   if (n.d === "h") w += gaps; else h += gaps;
   return [w, h];
 }
@@ -3200,7 +3213,8 @@ function solveTree(n, r, leaves, splitters) {
   if (!n) return;
   if (!n.c) { leaves.push({ node: n, r: r }); return; }
   const horiz = n.d === "h";
-  const total = (horiz ? r.w : r.h) - LAYOUT_GAP * (n.c.length - 1);
+  const G = layoutGap();
+  const total = (horiz ? r.w : r.h) - G * (n.c.length - 1);
   let pos = horiz ? r.x : r.y;
   for (let i = 0; i < n.c.length; i++) {
     const last = i === n.c.length - 1;
@@ -3211,8 +3225,8 @@ function solveTree(n, r, leaves, splitters) {
     pos += size;
     if (!last) {
       splitters.push({ node: n, i: i, total: total,
-        r: horiz ? { x: pos, y: r.y, w: LAYOUT_GAP, h: r.h } : { x: r.x, y: pos, w: r.w, h: LAYOUT_GAP } });
-      pos += LAYOUT_GAP;
+        r: horiz ? { x: pos, y: r.y, w: G, h: r.h } : { x: r.x, y: pos, w: r.w, h: G } });
+      pos += G;
     }
   }
 }
@@ -3324,8 +3338,7 @@ class PanelManager {
   }
   layout(width, height) {
     this.leaves = []; this.splitters = [];
-    solveTree(this.root, { x: LAYOUT_MARGIN, y: LAYOUT_MARGIN,
-      w: width - LAYOUT_MARGIN * 2, h: height - LAYOUT_MARGIN * 2 }, this.leaves, this.splitters);
+    solveTree(this.root, layoutArea(width, height), this.leaves, this.splitters);
     for (let i = 0; i < this.leaves.length; i++) {
       const l = this.leaves[i], p = this.instances.get(l.node.id);
       p.x = l.r.x; p.y = l.r.y; p.w = l.r.w; p.h = l.r.h;
@@ -3535,6 +3548,7 @@ const U_SPEED = { scale: 1, dp: 2, suffix: "x", zero: "frozen" };
 const U_PULSE = { scale: 1, dp: 2, suffix: "x", zero: "steady" };
 const U_FPS = { scale: 1, dp: 0, suffix: "", zero: "uncapped", int: true };
 const U_NUM2 = { scale: 1, dp: 2, suffix: "" };
+const U_PX = { scale: 1, dp: 0, suffix: " px", int: true };
 
 /* Seconds, shown as "45s", "5m 30s", "2h 15m"; typed the same way, or as
    plain seconds. Whole seconds only. */
@@ -3599,7 +3613,18 @@ const SETTINGS_SCHEMA = [
   { id: "layout", title: "LAYOUT", rows: [
     { kind: "button", label: "⊞ LAYOUT & PANELS",
       tip: "Move, resize, add and remove panels over the live wallpaper, and change each panel's own settings (L).",
-      run: function () { LayoutEditor.enter(); } }
+      run: function () { LayoutEditor.enter(); } },
+    { kind: "range", label: "Gap between panels", path: "space.gap", min: 0, max: 200, step: 1, unit: U_PX, apply: "space" },
+    // the insets' maximum is the screen itself — a function, read whenever
+    // the controls are synced, so it follows a resize
+    { kind: "range", label: "Inset top", path: "space.top", min: 0, max: function () { return VH; }, step: 1, unit: U_PX, apply: "space",
+      tip: "Empty space kept along the top of the screen — for a top taskbar, say. Type a value for an exact one." },
+    { kind: "range", label: "Inset right", path: "space.right", min: 0, max: function () { return VW; }, step: 1, unit: U_PX, apply: "space",
+      tip: "Empty space kept along the right of the screen." },
+    { kind: "range", label: "Inset bottom", path: "space.bottom", min: 0, max: function () { return VH; }, step: 1, unit: U_PX, apply: "space",
+      tip: "Empty space kept along the bottom of the screen — for the taskbar, say." },
+    { kind: "range", label: "Inset left", path: "space.left", min: 0, max: function () { return VW; }, step: 1, unit: U_PX, apply: "space",
+      tip: "Empty space kept along the left of the screen — for desktop icons, say." }
   ]},
   { id: "look", title: "APPEARANCE", apply: "look", rows: [
     { kind: "range", label: "Text size", path: "look.text", min: 0.6, max: 2.5, step: 0.05, unit: U_PCT,
@@ -3684,6 +3709,10 @@ const SETTINGS_SCHEMA = [
   ]}
 ];
 
+/** A range row's maximum — a number, or a function of the moment (the
+ *  screen size, for the insets). */
+function rowMax(row) { return typeof row.max === "function" ? row.max() : row.max; }
+
 /** Holds every value in `o` to what its row allows, in place: ranges
  *  clamped (and rounded where the unit is whole numbers), unknown choices
  *  back to their default, text cut to length. */
@@ -3693,7 +3722,9 @@ function sanitizeRows(o, rows, defaults) {
     if (!row.path) continue;
     const v = getPath(o, row.path);
     if (row.kind === "range") {
-      const c = clamp(v, row.min, row.max);
+      // a maximum that depends on the screen limits the controls only: a
+      // saved value is not cut down for a screen it was not set on
+      const c = clamp(v, row.min, typeof row.max === "function" ? Infinity : row.max);
       setPath(o, row.path, row.unit && row.unit.int ? Math.round(c) : c);
     } else if (row.kind === "select" && !row.options.some(function (x) { return x[0] === v; })) {
       setPath(o, row.path, getPath(defaults, row.path));
@@ -3867,6 +3898,12 @@ const APPLY = {
     if (forced) Settings.status("no background left ticked — current is now No background");
     Settings.refresh();
   },
+  space: function () {
+    const root = document.documentElement.style;
+    root.setProperty("--hk-it", S.space.top + "px");
+    root.setProperty("--hk-ir", S.space.right + "px");
+    APPLY.layout();
+  },
   // the glow is baked into each panel's cached frame
   glow: function () { if (dashboard) dashboard.panels.invalidateAll(); },
   uiScale: function () {
@@ -3958,7 +3995,7 @@ const Form = (function () {
       // still what is stored, typed and shown
       const map = row.map;
       if (map) { inp.min = 0; inp.max = map.steps; inp.step = 1; }
-      else { inp.min = row.min; inp.max = row.max; inp.step = row.step; }
+      else { inp.min = row.min; inp.max = rowMax(row); inp.step = row.step; }
       const fromSlider = function () { return map ? map.from(Number(inp.value)) : parseFloat(inp.value); };
       inp.setAttribute("aria-label", row.label);
       const u = row.unit || U_NUM2;
@@ -3994,10 +4031,11 @@ const Form = (function () {
             const v = unitParse(u, box.value);
             if (isNaN(v)) ctx.status("not a number: " + box.value.trim());
             else {
-              const c = clamp(v, row.min, row.max);
+              const hi = rowMax(row);
+              const c = clamp(v, row.min, hi);
               if (c !== v) ctx.status(row.label.toLowerCase() + " limited to " + (u.show
-                ? unitShow(u, row.min) + " – " + unitShow(u, row.max)
-                : unitNumber(u, row.min) + "–" + unitNumber(u, row.max) + u.suffix));
+                ? unitShow(u, row.min) + " – " + unitShow(u, hi)
+                : unitNumber(u, row.min) + "–" + unitNumber(u, hi) + u.suffix));
               if (c !== ctx.get(row.path)) ctx.set(row, sec, c);
             }
           }
@@ -4018,6 +4056,7 @@ const Form = (function () {
 
       function sync() {
         const v = ctx.get(row.path);
+        if (!map && typeof row.max === "function") inp.max = rowMax(row);
         inp.value = map ? map.to(v) : v;
         val.textContent = unitShow(u, v);
       }
@@ -4757,7 +4796,7 @@ const PanelGears = (function () {
    Nothing here exists outside edit mode: entering builds the overlay,
    leaving removes it. */
 const LayoutEditor = (function () {
-  const EDGE_ZONE = 28;          // px from a screen edge that docks along it
+  const EDGE_ZONE = 28;          // px from the layout's edge that docks along it
   const EDGE_SHARE = 0.25;       // how much of that side the docked panel takes
   const SIDE_NAMES = { l: "left", r: "right", t: "top", b: "bottom" };
   const UNDO_MAX = 60;
@@ -4829,7 +4868,7 @@ const LayoutEditor = (function () {
   }
   /** Rect of the `side` half of r, the part a panel docked there gets. */
   function halfOf(r, side) {
-    const hw = (r.w - LAYOUT_GAP) / 2, hh = (r.h - LAYOUT_GAP) / 2;
+    const hw = (r.w - layoutGap()) / 2, hh = (r.h - layoutGap()) / 2;
     if (side === "l") return { x: r.x, y: r.y, w: hw, h: r.h };
     if (side === "r") return { x: r.x + r.w - hw, y: r.y, w: hw, h: r.h };
     if (side === "t") return { x: r.x, y: r.y, w: r.w, h: hh };
@@ -4839,7 +4878,7 @@ const LayoutEditor = (function () {
    *  new panel of type `nType` at least their minimum size. */
   function fits(r, tType, side, nType) {
     const horiz = side === "l" || side === "r";
-    const half = ((horiz ? r.w : r.h) - LAYOUT_GAP) / 2;
+    const half = ((horiz ? r.w : r.h) - layoutGap()) / 2;
     const tm = PANEL_TYPES[tType].min, nm = PANEL_TYPES[nType].min;
     const a = horiz ? 0 : 1, cross = horiz ? r.h : r.w;
     return half >= tm[a] && half >= nm[a] && cross >= nm[1 - a];
@@ -4849,13 +4888,15 @@ const LayoutEditor = (function () {
    *  or null where it would do nothing. targetId null means the whole
    *  screen — one of its edges, or all of it when the layout is empty. */
   function targetAt(x, y) {
-    const pm = dashboard.panels, G = LAYOUT_GAP, M = LAYOUT_MARGIN;
-    const full = { x: M, y: M, w: VW - 2 * M, h: VH - 2 * M };
+    const pm = dashboard.panels, G = layoutGap();
+    const full = layoutArea(VW, VH);
     const nMin = PANEL_TYPES[drag.type].min;
     if (!pm.leaves.length) return { targetId: null, side: "r", rect: full, ok: true, label: "place here" };
 
-    let side = x < EDGE_ZONE ? "l" : x > VW - EDGE_ZONE ? "r"
-             : y < EDGE_ZONE ? "t" : y > VH - EDGE_ZONE ? "b" : null;
+    // the zones hug the layout's own edges, and take in the insets beyond
+    // them: dropping into empty inset space docks along that side
+    let side = x < full.x + EDGE_ZONE ? "l" : x > full.x + full.w - EDGE_ZONE ? "r"
+             : y < full.y + EDGE_ZONE ? "t" : y > full.y + full.h - EDGE_ZONE ? "b" : null;
     if (side) {
       // what stays behind: everything, less the panel being moved
       const rest = drag.kind === "move" ? removeLeaf(cloneTree(pm.root), drag.id) : pm.root;
@@ -5218,6 +5259,7 @@ function onResize() {
   dashboard.resized();
   LayoutEditor.refresh();
   PanelGears.refresh();
+  Settings.refresh();
 }
 
 // Precedence: a link's ?config= (decoded asynchronously, below), then this

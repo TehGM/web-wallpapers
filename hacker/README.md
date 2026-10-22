@@ -43,7 +43,7 @@ while the setting keeps the exact value.
 
 | Section | Settings |
 | --- | --- |
-| LAYOUT | **Layout & panels** (also **L**) — see Layout and Panel settings below. |
+| LAYOUT | **Layout & panels** (also **L**) — see Layout and Panel settings below. **Gap between panels** (0–200 px) and **Insets** on each side, in px (8 by default) — empty space kept clear of panels, for a taskbar or desktop icons; the background still fills it. Each slider runs up to the current screen's width or height, and follows a resize; a saved value is never cut down for a smaller screen, and however large the insets, a sliver of layout stays on screen. |
 | APPEARANCE | Text size — every panel's text, multiplying each panel's own text size (60–250%). Title bars scale with it, and so does everything sitting in them: the CFG button, the panel ⚙ buttons, the layout editor's ⚙ and ✕. |
 | | Border glow — strength of the soft glow around every panel's frame, 0–300%, multiplying each panel's own; 0 leaves a plain line. |
 | | Border pulse — how fast that glow breathes and the title-bar dots blink, 0–4x, multiplying each panel's own; 0 holds them still. Each breathing step repaints the panel's cached frame, so this is a cost knob too — measured at 1080p: steady 0.25 ms/frame, default 0.30, 4x 0.59. |
