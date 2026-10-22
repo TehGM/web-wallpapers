@@ -28,7 +28,8 @@ save-compatibility obligations (see the table in the root `CLAUDE.md`).
 ## Settings
 
 **⚙ CFG**, in the title bar of the top-right panel (left of its status dot),
-opens the settings window; **H** toggles it, **Esc** closes it. It opens in
+opens the settings window; **H** toggles it, **Esc** closes it, **L** opens
+the layout editor. It opens in
 the middle of the screen and its title bar drags it; a dragged window stays
 where it was put until the screen size changes. It is styled as one more
 window of the console.
@@ -42,6 +43,7 @@ while the setting keeps the exact value.
 
 | Section | Settings |
 | --- | --- |
+| LAYOUT | **Edit layout** (also **L**) — see Layout below. |
 | CRT // OVERLAY | Scanlines and their drift speed, refresh band and its speed, flicker, glitch-bar frequency, vignette. Strengths are relative to the original look (100%); 0 switches an effect off and skips its draw. |
 | ANIMATION | Master speed — scales everything that moves. 0 freezes the screen, and a frozen screen is not redrawn at all. |
 | PERFORMANCE | FPS cap (0 = uncapped), pixel-ratio cap, and **Override WE FPS limit** (see Performance). |
@@ -87,10 +89,52 @@ within noise (0.24–0.26 ms/frame at 1080p either way), and with everything
 at its default the picture is pixel-identical to the build before settings
 existed.
 
+## Layout
+
+**Edit layout** (in settings, or **L**) puts the editor over the live
+wallpaper, Visual Studio-style:
+
+- **Move** — drag a panel. Drop it on another panel's edge to dock beside it
+  (that panel is halved), on its middle to swap the two, or on the very edge
+  of the screen to run along that whole side (taking a quarter of it). A
+  highlight shows where it will land before you let go.
+- **Resize** — drag the gap between two panels. Neither side goes below its
+  panel's minimum size.
+- **Remove** — ✕ in a panel's corner. Removing everything leaves just the
+  background.
+- **Add** — drag an entry from the list onto the screen, or click it to split
+  the largest panel along its longer side. Any panel can be added any number
+  of times; the list shows how many of each are already on screen (×2). A drop
+  that would squeeze a panel below its minimum size is refused, with a note
+  in the status line.
+- **Undo** (Ctrl+Z) steps back through this session's edits; **Reset** goes
+  back to the default layout; **Done** or Esc leaves. Esc in the middle of a
+  drag cancels just the drag.
+
+The layout is a tree: a leaf is a panel (`{ p: type, id }`), a split lays its
+children side by side or stacked (`{ d: "h" | "v", c: [...], f: [fractions] }`),
+and the tree is kept as simple as it can be — a one-child split collapses, a
+split inside one running the same way is folded into it. It lives in
+`S.layout` and is saved and shared like every other setting; `null` means the
+stock layout, which keeps its per-load jitter until the first edit freezes it.
+Loaded layouts are rebuilt from scratch (`validateTree`): unknown panel types
+and malformed splits are dropped and duplicate ids renumbered.
+
+A leaf's id ties it to its live panel, so moving a panel keeps it running
+mid-sentence rather than restarting it, and a removed panel's cache bitmap is
+freed straight away. Panel kinds and their minimum sizes are declared in
+`PANEL_TYPES`.
+
+Cost scales with what is on screen, roughly with the number of panels: the
+stock layout costs what it always did, and about thirty panels measured
+around 0.95 ms/frame at 1080p. The editor itself is DOM that exists only
+while it is open.
+
 ## What is on screen
 
-Eight panels in a fixed three-column grid whose split fractions are jittered
-a little on every load, so no two launches have quite the same geometry.
+The stock layout is eight panels in a three-column grid whose split fractions
+are jittered a little on every load, so no two launches have quite the same
+geometry. The layout can be rearranged freely — see Layout.
 
 | Panel | Title on screen | What it fakes |
 | --- | --- | --- |

@@ -124,6 +124,73 @@
   }
   .hk-status{ flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--hk-dg); }
 
+  /* button rows: one full-width button */
+  .hk-row > .hk-btn{ display:block; }
+
+  /* Layout editor overlay — exists only while editing. */
+  .hk-lay{ position:fixed; inset:0; z-index:25; user-select:none; }
+  .hk-lp{
+    position:absolute; box-sizing:border-box; border-radius:4px; cursor:grab;
+    border:1px dashed rgba(43,232,244,.6); background:rgba(4,8,10,.38);
+  }
+  .hk-lp:hover{ background:rgba(43,232,244,.10); border-color:var(--hk-c); }
+  .hk-lay.dragging .hk-lp{ cursor:grabbing; }
+  .hk-lp.moving{ opacity:.3; }
+  .hk-lp-c{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:3px; padding:4px; overflow:hidden; pointer-events:none; text-align:center;
+    font:700 11px/1.3 var(--hk-mono); color:var(--hk-c); text-shadow:0 0 4px #000, 0 0 2px #000;
+  }
+  .hk-lp-c small{ font-weight:400; color:var(--hk-l); }
+  .hk-lp-x{
+    position:absolute; top:0; right:0; width:24px; height:18px; border-radius:0 4px 0 4px;
+    background:rgba(255,59,74,.55); color:var(--hk-w); cursor:pointer;
+    font:700 11px/18px var(--hk-mono); text-align:center;
+  }
+  .hk-lp-x:hover{ background:var(--hk-r); }
+  .hk-sp{ position:absolute; z-index:1; }
+  .hk-sp.h{ cursor:col-resize; }
+  .hk-sp.v{ cursor:row-resize; }
+  .hk-sp::after{ content:""; position:absolute; background:rgba(60,255,122,.35); }
+  .hk-sp.h::after{ top:0; bottom:0; left:50%; width:2px; margin-left:-1px; }
+  .hk-sp.v::after{ left:0; right:0; top:50%; height:2px; margin-top:-1px; }
+  .hk-sp:hover::after{ background:var(--hk-g); }
+  .hk-drop{
+    position:absolute; z-index:2; display:none; align-items:center; justify-content:center;
+    box-sizing:border-box; border:2px solid var(--hk-g); border-radius:4px; pointer-events:none;
+    background:rgba(60,255,122,.18); color:var(--hk-g); text-align:center; padding:6px;
+    font:700 11px/1.3 var(--hk-mono); text-shadow:0 0 4px #000, 0 0 2px #000;
+  }
+  .hk-drop.bad{ border-color:var(--hk-r); background:rgba(255,59,74,.16); color:var(--hk-r); }
+  /* the screen-edge docking zones, shown while dragging so they can be found */
+  .hk-edge{ position:absolute; display:none; pointer-events:none; background:rgba(60,255,122,.22); }
+  .hk-lay.dragging .hk-edge{ display:block; }
+  .hk-edge.l{ left:0; top:0; bottom:0; width:4px; }
+  .hk-edge.r{ right:0; top:0; bottom:0; width:4px; }
+  .hk-edge.t{ top:0; left:0; right:0; height:4px; }
+  .hk-edge.b{ bottom:0; left:0; right:0; height:4px; }
+  .hk-empty{
+    position:absolute; left:50%; top:30%; transform:translateX(-50%); width:min(420px, 80vw);
+    color:var(--hk-l); font:12px/1.5 var(--hk-mono); text-align:center; text-shadow:0 0 4px #000;
+  }
+  .hk-ghost{
+    position:fixed; z-index:40; display:none; pointer-events:none; padding:2px 8px; border-radius:2px;
+    background:var(--hk-g); color:#04080A; font:700 11px/1.4 var(--hk-mono); white-space:nowrap;
+  }
+  .hk-pal{ z-index:26; }
+  .hk-sh-flat{ cursor:default; }
+  .hk-sh-flat::before{ content:""; }
+  .hk-pi{
+    margin:4px 0; padding:4px 6px; cursor:grab; border-radius:2px;
+    border:1px solid rgba(60,255,122,.25); background:rgba(60,255,122,.04);
+  }
+  .hk-pi:hover, .hk-pi:focus-visible{ background:rgba(60,255,122,.14); outline:none; }
+  .hk-pi-top{ display:flex; justify-content:space-between; gap:8px; }
+  .hk-pi b{ color:var(--hk-g); }
+  .hk-pi .n{ color:var(--hk-c); font-size:10px; white-space:nowrap; }
+  .hk-pi .d{ color:var(--hk-gr); font-size:10px; }
+  .hk-pi.on{ border-color:rgba(43,232,244,.45); }
+
   .hk-modal{
     position:fixed; inset:0; z-index:30; display:none;
     align-items:center; justify-content:center; background:rgba(0,0,0,.55);
@@ -531,7 +598,10 @@ const DEFAULTS = {
   fx:   { scan: 1, scanDrift: 1, band: 1, bandSpeed: 1, flicker: 1, glitch: 1, vignette: 1 },
   anim: { speed: 1 },
   perf: { fpsCap: 60, fpsOverride: false, dprCap: 2 },
-  ui:   { button: "dim" }
+  ui:   { button: "dim" },
+  // null: the stock layout (re-jittered every load). Once edited, the exact
+  // tree as { root } — root null for an empty screen. See stockLayout().
+  layout: null
 };
 function cloneState(o) { return JSON.parse(JSON.stringify(o)); }
 let S = cloneState(DEFAULTS);
@@ -789,6 +859,13 @@ class Layer {
     this.dirty = true;
   }
   invalidate() { this.dirty = true; }
+  /** Frees the bitmap now rather than whenever the panel is collected —
+   *  a removed panel's cache can be a sizeable slice of a 4K screen. */
+  release() {
+    if (this.cv) { this.cv.width = 0; this.cv.height = 0; }
+    this.cv = null; this.cx = null; this.pw = 0; this.ph = 0;
+    this.dirty = true;
+  }
   /** Repaints through fn(rect) if needed, then blits. `pad` widens the
    *  bitmap in CSS px, for strokes that spill outside the rect. */
   draw(r, fn, pad) {
@@ -2788,29 +2865,256 @@ function buildShellDeck() {
    Layout + dashboard
    ------------------------------------------------------------------ */
 
+/* Every kind of panel the layout can hold. `min` is the smallest size, in
+   CSS px, the panel is laid out at by the editor — below it the content
+   stops reading as anything. Keys are part of saved layouts. */
+const PANEL_TYPES = {
+  trace:     { name: "SYS://TRACE", desc: "scrolling event log", min: [150, 70],
+               make: function () { return new TerminalPanel("SYS://TRACE", T.Green, RD.systemLogLine, 5, 11); } },
+  hex:       { name: "MEMORY INSPECTOR", desc: "hex dump", min: [150, 60],
+               make: function () { return new HexPanel(); } },
+  code:      { name: "SOURCE SYNTH", desc: "code being typed live", min: [200, 90],
+               make: function () { return new CodePanel(); } },
+  target:    { name: "TARGET ACQUISITION", desc: "companies being “breached”", min: [170, 150],
+               make: function () { return new CompanyPanel(); } },
+  tty:       { name: "TTY", desc: "terminal running commands", min: [200, 90],
+               make: function () { return new ShellPanel(); } },
+  telemetry: { name: "TELEMETRY", desc: "charts and counters", min: [200, 80],
+               make: function () { return new GraphPanel(2, true, 3); } },
+  pipeline:  { name: "TASK PIPELINE", desc: "progress bars", min: [150, 56],
+               make: function () { return new ProgressPanel(); } },
+  stream:    { name: "RAW STREAM", desc: "binary stream", min: [110, 56],
+               make: function () { return new BinaryPanel(); } }
+};
+const PANEL_TYPE_KEYS = Object.keys(PANEL_TYPES);
+const LAYOUT_GAP = 6, LAYOUT_MARGIN = 8;
+
+/* A layout is a tree. A leaf is a panel, { p: type, id }; a split lays its
+   children side by side ("h") or stacked ("v"), { d, c: [children],
+   f: [fractions summing to 1] }. Fractions share out the split's size net
+   of the gaps between its children. The id ties a leaf to its live panel
+   instance, so moving a panel keeps its content running instead of
+   restarting it. */
+
 function jitter(base, amount) { return base + (rnd() * 2 - 1) * amount; }
 
-/** Owns every panel and computes the uneven dashboard layout. Split
- *  fractions are jittered once per launch so the geometry differs each
- *  time the page loads. */
+/** The arrangement the wallpaper ships with, its split fractions jittered
+ *  so the geometry differs a little on every load. */
+function stockLayout() {
+  const leftW = jitter(0.22, 0.02), centerW = jitter(0.46, 0.02);
+  const bottomH = jitter(0.18, 0.02);
+  const leftSplit = jitter(0.58, 0.04), rightSplit = jitter(0.55, 0.04);
+  const leaf = function (p, id) { return { p: p, id: id }; };
+  return { d: "v", f: [1 - bottomH, bottomH], c: [
+    { d: "h", f: [leftW, centerW, 1 - leftW - centerW], c: [
+      { d: "v", f: [leftSplit, 1 - leftSplit], c: [leaf("trace", 1), leaf("hex", 2)] },
+      leaf("code", 3),
+      { d: "v", f: [rightSplit, 1 - rightSplit], c: [leaf("target", 4), leaf("tty", 5)] }
+    ]},
+    { d: "h", f: [0.38, 0.36, 0.26], c: [leaf("telemetry", 6), leaf("pipeline", 7), leaf("stream", 8)] }
+  ]};
+}
+
+function cloneTree(n) { return n ? JSON.parse(JSON.stringify(n)) : null; }
+
+/** Collapses one-child splits and folds a split into a parent running the
+ *  same way, so however a layout was edited it stays the simplest tree
+ *  that draws it. Mutates and returns the (possibly new) node. */
+function tidyTree(n) {
+  if (!n || !n.c) return n;
+  const c = [], f = [];
+  for (let i = 0; i < n.c.length; i++) {
+    const k = tidyTree(n.c[i]);
+    if (!k) continue;
+    if (k.c && k.d === n.d) {
+      for (let j = 0; j < k.c.length; j++) { c.push(k.c[j]); f.push(n.f[i] * k.f[j]); }
+    } else { c.push(k); f.push(n.f[i]); }
+  }
+  if (c.length === 0) return null;
+  if (c.length === 1) return c[0];
+  let sum = 0;
+  for (let i = 0; i < f.length; i++) sum += f[i];
+  n.c = c;
+  n.f = f.map(function (x) { return Number((x / sum).toFixed(5)); });
+  return n;
+}
+
+/** Rebuilds a layout from untrusted input — a save, a link, a JSON file —
+ *  keeping only what is well-formed. Unknown panel types and malformed
+ *  splits are dropped, missing or bad fractions shared equally, duplicate
+ *  ids renumbered. Returns a tidy tree, or null when nothing survives. */
+function validateTree(n) {
+  const seen = new Set();
+  let leaves = 0;
+  function walk(n, depth) {
+    if (!n || typeof n !== "object" || depth > 24 || leaves >= 64) return null;
+    if (typeof n.p === "string") {
+      if (!PANEL_TYPES[n.p]) return null;
+      let id = Number.isInteger(n.id) && n.id > 0 ? n.id : 0;
+      if (!id || seen.has(id)) id = 0;
+      if (id) seen.add(id);
+      leaves++;
+      return { p: n.p, id: id };
+    }
+    if ((n.d !== "h" && n.d !== "v") || !Array.isArray(n.c)) return null;
+    const c = [], f = [];
+    for (let i = 0; i < n.c.length; i++) {
+      const k = walk(n.c[i], depth + 1);
+      if (!k) continue;
+      const fi = Array.isArray(n.f) ? Number(n.f[i]) : NaN;
+      c.push(k);
+      f.push(Number.isFinite(fi) && fi > 0 ? fi : NaN);
+    }
+    const known = f.filter(function (x) { return !isNaN(x); });
+    const fill = known.length ? known.reduce(function (a, b) { return a + b; }, 0) / known.length : 1;
+    return { d: n.d, c: c, f: f.map(function (x) { return isNaN(x) ? fill : x; }) };
+  }
+  const t = tidyTree(walk(n, 0));
+  // ids lost to duplicates or bad input get fresh ones
+  let next = 1;
+  seen.forEach(function (id) { if (id >= next) next = id + 1; });
+  forEachLeaf(t, function (l) { if (!l.id) l.id = next++; });
+  return t;
+}
+
+function forEachLeaf(n, fn) {
+  if (!n) return;
+  if (!n.c) { fn(n); return; }
+  for (let i = 0; i < n.c.length; i++) forEachLeaf(n.c[i], fn);
+}
+function nextLeafId(root) {
+  let m = 0;
+  forEachLeaf(root, function (l) { if (l.id > m) m = l.id; });
+  return m + 1;
+}
+/** Smallest [w, h] a subtree can be laid out at, gaps included. */
+function minSize(n) {
+  if (!n) return [0, 0];
+  if (!n.c) return PANEL_TYPES[n.p].min.slice();
+  let w = 0, h = 0;
+  for (let i = 0; i < n.c.length; i++) {
+    const m = minSize(n.c[i]);
+    if (n.d === "h") { w += m[0]; h = Math.max(h, m[1]); }
+    else { h += m[1]; w = Math.max(w, m[0]); }
+  }
+  const gaps = (n.c.length - 1) * LAYOUT_GAP;
+  if (n.d === "h") w += gaps; else h += gaps;
+  return [w, h];
+}
+
+/** Lays the tree out into `r`. Collects every leaf with its rect, and every
+ *  gap between two siblings as a splitter the editor can drag. */
+function solveTree(n, r, leaves, splitters) {
+  if (!n) return;
+  if (!n.c) { leaves.push({ node: n, r: r }); return; }
+  const horiz = n.d === "h";
+  const total = (horiz ? r.w : r.h) - LAYOUT_GAP * (n.c.length - 1);
+  let pos = horiz ? r.x : r.y;
+  for (let i = 0; i < n.c.length; i++) {
+    const last = i === n.c.length - 1;
+    // the last child takes whatever is left, so rounding never opens a seam
+    const size = last ? (horiz ? r.x + r.w : r.y + r.h) - pos : total * n.f[i];
+    const cr = horiz ? { x: pos, y: r.y, w: size, h: r.h } : { x: r.x, y: pos, w: r.w, h: size };
+    solveTree(n.c[i], cr, leaves, splitters);
+    pos += size;
+    if (!last) {
+      splitters.push({ node: n, i: i, total: total,
+        r: horiz ? { x: pos, y: r.y, w: LAYOUT_GAP, h: r.h } : { x: r.x, y: pos, w: r.w, h: LAYOUT_GAP } });
+      pos += LAYOUT_GAP;
+    }
+  }
+}
+
+/* ---- edits — each takes a root and returns the new root ------------- */
+
+/** Finds the split holding the leaf with this id, and the leaf's index. */
+function findParent(n, id, parent, index) {
+  if (!n) return null;
+  if (!n.c) return n.id === id ? { parent: parent, index: index, leaf: n } : null;
+  for (let i = 0; i < n.c.length; i++) {
+    const hit = findParent(n.c[i], id, n, i);
+    if (hit) return hit;
+  }
+  return null;
+}
+function removeLeaf(root, id) {
+  const hit = findParent(root, id, null, -1);
+  if (!hit) return root;
+  if (!hit.parent) return null;
+  hit.parent.c.splice(hit.index, 1);
+  hit.parent.f.splice(hit.index, 1);
+  return tidyTree(root);
+}
+/** Docks `leaf` on one side ("l", "r", "t", "b") of the leaf with id
+ *  `targetId`, halving that leaf — or, with targetId null, along that whole
+ *  edge of the screen, taking `share` of it. */
+function dockLeaf(root, leaf, targetId, side, share) {
+  const dir = side === "l" || side === "r" ? "h" : "v";
+  const before = side === "l" || side === "t";
+  if (!root) return leaf;
+  if (targetId === null) {
+    const s = share || 0.25;
+    const wrap = { d: dir, c: before ? [leaf, root] : [root, leaf], f: before ? [s, 1 - s] : [1 - s, s] };
+    return tidyTree(wrap);
+  }
+  const hit = findParent(root, targetId, null, -1);
+  if (!hit) return root;
+  const target = hit.leaf;
+  if (hit.parent && hit.parent.d === dir) {
+    // the target's own split already runs this way: share its slot
+    const half = hit.parent.f[hit.index] / 2;
+    hit.parent.f[hit.index] = half;
+    hit.parent.c.splice(before ? hit.index : hit.index + 1, 0, leaf);
+    hit.parent.f.splice(before ? hit.index : hit.index + 1, 0, half);
+    return tidyTree(root);
+  }
+  const pair = { d: dir, c: before ? [leaf, target] : [target, leaf], f: [0.5, 0.5] };
+  if (!hit.parent) return pair;
+  hit.parent.c[hit.index] = pair;
+  return tidyTree(root);
+}
+function swapLeaves(root, idA, idB) {
+  const a = findParent(root, idA, null, -1), b = findParent(root, idB, null, -1);
+  if (!a || !b) return root;
+  const t = { p: a.leaf.p, id: a.leaf.id };
+  a.leaf.p = b.leaf.p; a.leaf.id = b.leaf.id;
+  b.leaf.p = t.p; b.leaf.id = t.id;
+  return root;
+}
+
+/** Owns the panel instances, one per layout leaf, and lays them out. */
 class PanelManager {
   constructor() {
-    this.leftW = jitter(0.22, 0.02);
-    this.centerW = jitter(0.46, 0.02);
-    this.bottomH = jitter(0.18, 0.02);
-    this.leftSplit = jitter(0.58, 0.04);
-    this.rightSplit = jitter(0.55, 0.04);
-
-    this.leftTerminal = new TerminalPanel("SYS://TRACE", T.Green, RD.systemLogLine, 5, 11);
-    this.hex = new HexPanel();
-    this.code = new CodePanel();
-    this.company = new CompanyPanel();
-    this.shell = new ShellPanel();
-    this.graphs = new GraphPanel(2, true, 3);
-    this.progress = new ProgressPanel();
-    this.binary = new BinaryPanel();
-    this.panels = [this.leftTerminal, this.hex, this.code, this.company,
-                   this.shell, this.graphs, this.progress, this.binary];
+    this.stock = stockLayout();
+    this.instances = new Map();      // leaf id -> panel
+    this.panels = [];                // in layout order, for update and draw
+    this.root = null;
+    this.leaves = [];                // [{ node, r }] after layout()
+    this.splitters = [];
+    this.setTree(this.currentTree());
+  }
+  /** The tree in force: the user's, or the stock one when there is none. */
+  currentTree() { return S.layout ? S.layout.root : this.stock; }
+  /** Makes the instances match the tree. A leaf whose id is already live
+   *  keeps its panel — and with it the content that panel was showing; a
+   *  leaf of a different type under the same id gets a fresh one. */
+  setTree(root) {
+    this.root = root;
+    const keep = new Map(), list = [];
+    const self = this;
+    forEachLeaf(root, function (leaf) {
+      let p = self.instances.get(leaf.id);
+      if (!p || p._type !== leaf.p) {
+        p = PANEL_TYPES[leaf.p].make();
+        p._type = leaf.p;
+      }
+      p._leafId = leaf.id;
+      keep.set(leaf.id, p);
+      list.push(p);
+    });
+    this.instances.forEach(function (p, id) { if (keep.get(id) !== p) p.layer.release(); });
+    this.instances = keep;
+    this.panels = list;
   }
   update(dt) { for (let i = 0; i < this.panels.length; i++) this.panels[i].update(dt); }
   /** A Layer notices its own geometry changing, but a resize can also
@@ -2820,40 +3124,15 @@ class PanelManager {
     for (let i = 0; i < this.panels.length; i++) this.panels[i].layer.invalidate();
   }
   layout(width, height) {
-    const gap = 6, margin = 8;
-    const w = width - margin * 2, h = height - margin * 2;
-    const x0 = margin, y0 = margin;
-
-    const bottomH = h * this.bottomH;
-    const topH = h - bottomH - gap;
-    const leftW = w * this.leftW;
-    const centerW = w * this.centerW;
-    const rightW = w - leftW - centerW - gap * 2;
-    const cx = x0 + leftW + gap;
-    const rx = cx + centerW + gap;
-
-    const set = function (p, x, y, pw, ph) { p.x = x; p.y = y; p.w = pw; p.h = ph; };
-
-    // Left column: tall terminal above hex viewer.
-    const leftTermH = topH * this.leftSplit;
-    set(this.leftTerminal, x0, y0, leftW, leftTermH);
-    set(this.hex, x0, y0 + leftTermH + gap, leftW, topH - leftTermH - gap);
-
-    // Centre column: the endless code writer is the star of the show.
-    set(this.code, cx, y0, centerW, topH);
-
-    // Right column: company showcase above the fake terminal.
-    const companyH = topH * this.rightSplit;
-    set(this.company, rx, y0, rightW, companyH);
-    set(this.shell, rx, y0 + companyH + gap, rightW, topH - companyH - gap);
-
-    // Bottom strip: telemetry, task pipeline, binary stream.
-    const by = y0 + topH + gap;
-    const teleW = w * 0.38, progW = w * 0.36;
-    const binW = w - teleW - progW - gap * 2;
-    set(this.graphs, x0, by, teleW, bottomH);
-    set(this.progress, x0 + teleW + gap, by, progW, bottomH);
-    set(this.binary, x0 + teleW + progW + gap * 2, by, binW, bottomH);
+    this.leaves = []; this.splitters = [];
+    solveTree(this.root, { x: LAYOUT_MARGIN, y: LAYOUT_MARGIN,
+      w: width - LAYOUT_MARGIN * 2, h: height - LAYOUT_MARGIN * 2 }, this.leaves, this.splitters);
+    for (let i = 0; i < this.leaves.length; i++) {
+      const l = this.leaves[i], p = this.instances.get(l.node.id);
+      p.x = l.r.x; p.y = l.r.y; p.w = l.r.w; p.h = l.r.h;
+      // telemetry reads best side by side in a wide slot, stacked in a tall one
+      if (p instanceof GraphPanel) p.horizontal = p.w >= p.h * 1.4;
+    }
   }
 }
 
@@ -2919,6 +3198,11 @@ class Dashboard {
     this.bg = new BackgroundLayer(pick(keys));
     this.glitchLeft = 0.18;
     this.glitchY = rnd();
+  }
+  /** Re-reads the layout from S: instances to match, then their rects. */
+  applyLayout() {
+    this.panels.setTree(this.panels.currentTree());
+    this.panels.layout(VW, VH);
   }
   resized() {
     this.panels.layout(VW, VH);
@@ -3051,6 +3335,11 @@ function unitParse(u, text) {
 }
 
 const SETTINGS_SCHEMA = [
+  { id: "layout", title: "LAYOUT", rows: [
+    { kind: "button", label: "⊞ EDIT LAYOUT",
+      tip: "Move, resize, add and remove panels over the live wallpaper (L).",
+      run: function () { LayoutEditor.enter(); } }
+  ]},
   { id: "fx", title: "CRT // OVERLAY", apply: "fx", rows: [
     { kind: "range", label: "Scanlines", path: "fx.scan", min: 0, max: 3, step: 0.05, unit: U_PCT,
       tip: "Darkness of the CRT scanline pattern. 100% is the original look." },
@@ -3105,6 +3394,9 @@ function forEachSettingRow(fn) {
 }
 /** Clamps every ranged value and drops unknown choices, in place. */
 function sanitizeState(s) {
+  if (s.layout !== null)
+    s.layout = s.layout && typeof s.layout === "object" && !Array.isArray(s.layout)
+      ? { root: validateTree(s.layout.root) } : null;
   forEachSettingRow(function (row) {
     if (!row.path) return;
     const v = getPath(s, row.path);
@@ -3123,7 +3415,12 @@ const APPLY = {
     if (applyHostFps()) Settings.refresh();
     if (dashboard && targetDpr() !== DPR) resize();
   },
-  ui: function () { Settings.syncButton(); }
+  ui: function () { Settings.syncButton(); },
+  layout: function () {
+    if (!dashboard) return;
+    dashboard.applyLayout();
+    LayoutEditor.refresh();
+  }
 };
 function applyAll() {
   const k = Object.keys(APPLY);
@@ -3150,6 +3447,14 @@ function loadState(obj, persist) {
 // Fed from the frame loop while the panel is open, null otherwise.
 let fpsMeter = null;
 
+function domEl(tag, cls, parent, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
 /* Nothing of the panel exists until it is first opened: closed, the only
    cost is the one CFG element and its click handler. */
 const Settings = (function () {
@@ -3159,13 +3464,7 @@ const Settings = (function () {
   let isOpen = false;
   let closePop = null;            // closes whichever dropdown list is open
 
-  function el(tag, cls, parent, text) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    if (parent) parent.appendChild(e);
-    return e;
-  }
+  const el = domEl;
   function onActivate(e, fn) {
     e.addEventListener("click", fn);
     e.addEventListener("keydown", function (ev) {
@@ -3476,7 +3775,7 @@ const Settings = (function () {
     statusEl = el("span", "hk-status", foot, "> ready");
     fpsEl = el("span", null, foot, "-- fps");
     const keys = el("span", null, foot, "H · F6");
-    keys.title = "H show/hide settings · F6 next background";
+    keys.title = "H show/hide settings · L edit layout · F6 next background";
 
     // a dragged window could end up off a shrunken screen; bring it back
     // to the middle instead
@@ -3707,11 +4006,469 @@ const Settings = (function () {
 })();
 
 /* ---------------------------------------------------------------------
+   Layout editor
+   ------------------------------------------------------------------ */
+
+/* Visual Studio–style docking over the live wallpaper. Drag a panel onto
+   another panel's edge to dock beside it, onto its middle to swap the two,
+   or onto an edge of the screen to run it along that whole side. Drag a
+   gap to resize; ✕ removes a panel; the list adds one — dragged into
+   place, or clicked to split the largest panel. Every edit lands in
+   S.layout and saves like any other setting.
+
+   Nothing here exists outside edit mode: entering builds the overlay,
+   leaving removes it. */
+const LayoutEditor = (function () {
+  const EDGE_ZONE = 28;          // px from a screen edge that docks along it
+  const EDGE_SHARE = 0.25;       // how much of that side the docked panel takes
+  const SIDE_NAMES = { l: "left", r: "right", t: "top", b: "bottom" };
+  const UNDO_MAX = 60;
+
+  let active = false, fromSettings = false;
+  let lay = null, pal = null, ghost = null, dropEl = null, statusEl = null;
+  let items = [];
+  let undo = [];
+  let drag = null;
+
+  /* ---- state ------------------------------------------------------- */
+
+  function editable() { return cloneTree(dashboard.panels.currentTree()); }
+  function snapshot() { return S.layout ? { root: cloneTree(S.layout.root) } : null; }
+  function pushUndo(snap) {
+    undo.push(snap === undefined ? snapshot() : snap);
+    if (undo.length > UNDO_MAX) undo.shift();
+  }
+  function commit(root) {
+    S.layout = { root: root };
+    APPLY.layout();
+    requestDraw();
+    persistLater();
+  }
+  function doUndo() {
+    if (!undo.length) { status("nothing to undo"); return; }
+    S.layout = undo.pop();
+    APPLY.layout();
+    requestDraw();
+    persistLater();
+    status("undone");
+  }
+  function resetLayout() {
+    if (!S.layout) { status("layout is already the default"); return; }
+    pushUndo();
+    S.layout = null;
+    APPLY.layout();
+    requestDraw();
+    persistLater();
+    status("layout reset");
+  }
+  function status(msg) { if (statusEl) statusEl.textContent = "> " + msg; }
+
+  function typeName(t) { return PANEL_TYPES[t].name; }
+  function panelName(id) {
+    const p = dashboard.panels.instances.get(id);
+    return p && p.title ? p.title : "panel";
+  }
+
+  /* ---- geometry ------------------------------------------------------ */
+
+  function place(e, r) {
+    e.style.left = r.x + "px"; e.style.top = r.y + "px";
+    e.style.width = r.w + "px"; e.style.height = r.h + "px";
+  }
+  /** Rect of the `side` half of r, the part a panel docked there gets. */
+  function halfOf(r, side) {
+    const hw = (r.w - LAYOUT_GAP) / 2, hh = (r.h - LAYOUT_GAP) / 2;
+    if (side === "l") return { x: r.x, y: r.y, w: hw, h: r.h };
+    if (side === "r") return { x: r.x + r.w - hw, y: r.y, w: hw, h: r.h };
+    if (side === "t") return { x: r.x, y: r.y, w: r.w, h: hh };
+    return { x: r.x, y: r.y + r.h - hh, w: r.w, h: hh };
+  }
+  /** Whether halving a leaf of type `tType` in rect r leaves both it and a
+   *  new panel of type `nType` at least their minimum size. */
+  function fits(r, tType, side, nType) {
+    const horiz = side === "l" || side === "r";
+    const half = ((horiz ? r.w : r.h) - LAYOUT_GAP) / 2;
+    const tm = PANEL_TYPES[tType].min, nm = PANEL_TYPES[nType].min;
+    const a = horiz ? 0 : 1, cross = horiz ? r.h : r.w;
+    return half >= tm[a] && half >= nm[a] && cross >= nm[1 - a];
+  }
+
+  /** What a drop at (x, y) would do: { targetId, side, rect, ok, label },
+   *  or null where it would do nothing. targetId null means the whole
+   *  screen — one of its edges, or all of it when the layout is empty. */
+  function targetAt(x, y) {
+    const pm = dashboard.panels, G = LAYOUT_GAP, M = LAYOUT_MARGIN;
+    const full = { x: M, y: M, w: VW - 2 * M, h: VH - 2 * M };
+    const nMin = PANEL_TYPES[drag.type].min;
+    if (!pm.leaves.length) return { targetId: null, side: "r", rect: full, ok: true, label: "place here" };
+
+    let side = x < EDGE_ZONE ? "l" : x > VW - EDGE_ZONE ? "r"
+             : y < EDGE_ZONE ? "t" : y > VH - EDGE_ZONE ? "b" : null;
+    if (side) {
+      // what stays behind: everything, less the panel being moved
+      const rest = drag.kind === "move" ? removeLeaf(cloneTree(pm.root), drag.id) : pm.root;
+      if (!rest) return null;
+      const horiz = side === "l" || side === "r", a = horiz ? 0 : 1;
+      const along = (horiz ? full.w : full.h) - G;
+      const s = along * EDGE_SHARE;
+      const rect = side === "l" ? { x: full.x, y: full.y, w: s, h: full.h }
+                 : side === "r" ? { x: full.x + full.w - s, y: full.y, w: s, h: full.h }
+                 : side === "t" ? { x: full.x, y: full.y, w: full.w, h: s }
+                 : { x: full.x, y: full.y + full.h - s, w: full.w, h: s };
+      const ok = s >= nMin[a] && along - s >= minSize(rest)[a] && (horiz ? full.h : full.w) >= nMin[1 - a];
+      return { targetId: null, side: side, rect: rect, ok: ok, label: "dock along the " + SIDE_NAMES[side] + " edge" };
+    }
+
+    let hit = null;
+    for (let i = 0; i < pm.leaves.length; i++) {
+      const r = pm.leaves[i].r;
+      if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) { hit = pm.leaves[i]; break; }
+    }
+    if (!hit) return null;
+    const r = hit.r, id = hit.node.id;
+    if (drag.kind === "move" && id === drag.id) return null;
+    const rx = (x - r.x) / r.w, ry = (y - r.y) / r.h;
+    if (drag.kind === "move" && rx > 0.3 && rx < 0.7 && ry > 0.3 && ry < 0.7)
+      return { targetId: id, side: "c", rect: r, ok: true, label: "swap with " + panelName(id) };
+    const d = { l: rx, r: 1 - rx, t: ry, b: 1 - ry };
+    side = "l";
+    for (const k in d) if (d[k] < d[side]) side = k;
+    return { targetId: id, side: side, rect: halfOf(r, side), ok: fits(r, hit.node.p, side, drag.type),
+             label: "dock " + SIDE_NAMES[side] + " of " + panelName(id) };
+  }
+
+  /* ---- edits ---------------------------------------------------------- */
+
+  function drop(d, t) {
+    if (!t.ok) { status("no room there for " + typeName(d.type) + " — try a bigger panel"); return; }
+    pushUndo();
+    let root = editable();
+    if (d.kind === "move" && t.side === "c") {
+      commit(swapLeaves(root, d.id, t.targetId));
+      status("swapped");
+      return;
+    }
+    let leaf;
+    if (d.kind === "move") {
+      leaf = { p: d.type, id: d.id };
+      root = removeLeaf(root, d.id);
+    } else {
+      leaf = { p: d.type, id: nextLeafId(root) };
+    }
+    commit(dockLeaf(root, leaf, t.targetId, t.side, EDGE_SHARE));
+    status((d.kind === "move" ? "moved " : "added ") + typeName(d.type));
+  }
+  /** Click-to-add: splits the largest panel along its longer side. */
+  function autoAdd(type) {
+    const pm = dashboard.panels;
+    if (!pm.leaves.length) {
+      pushUndo();
+      commit({ p: type, id: 1 });
+      status("added " + typeName(type));
+      return;
+    }
+    let best = null;
+    for (let i = 0; i < pm.leaves.length; i++) {
+      const l = pm.leaves[i];
+      if (!best || l.r.w * l.r.h > best.r.w * best.r.h) best = l;
+    }
+    const side = best.r.w >= best.r.h ? "r" : "b";
+    if (!fits(best.r, best.node.p, side, type)) {
+      status("no room left for " + typeName(type) + " — remove or shrink a panel first");
+      return;
+    }
+    pushUndo();
+    const root = editable();
+    commit(dockLeaf(root, { p: type, id: nextLeafId(root) }, best.node.id, side));
+    status("added " + typeName(type) + " beside " + panelName(best.node.id));
+  }
+  function removePanel(id) {
+    const name = panelName(id);
+    pushUndo();
+    commit(removeLeaf(editable(), id));
+    status("removed " + name);
+  }
+
+  /* ---- dragging -------------------------------------------------------- */
+
+  function listen(on) {
+    const f = on ? window.addEventListener : window.removeEventListener;
+    f.call(window, "pointermove", onMove);
+    f.call(window, "pointerup", onUp);
+    f.call(window, "pointercancel", cancel);
+  }
+  function startDrag(e, d) {
+    if (e.button !== 0 || drag) return;
+    e.preventDefault();
+    drag = d;
+    d.x0 = e.clientX; d.y0 = e.clientY; d.live = false; d.t = null;
+    listen(true);
+  }
+  function startSplit(e, k) {
+    if (e.button !== 0 || drag) return;
+    e.preventDefault();
+    const before = snapshot();
+    // the first edit of the stock layout freezes its jitter into a tree of
+    // its own — the same shape, so splitter k is still the same gap
+    if (!S.layout) { S.layout = { root: editable() }; APPLY.layout(); }
+    const sp = dashboard.panels.splitters[k];
+    const horiz = sp.node.d === "h";
+    drag = { kind: "split", sp: sp, horiz: horiz, start: horiz ? e.clientX : e.clientY,
+             f0: sp.node.f.slice(), before: before, moved: false };
+    document.body.style.cursor = horiz ? "col-resize" : "row-resize";
+    listen(true);
+  }
+  function onMove(e) {
+    const d = drag;
+    if (!d) return;
+    if (d.kind === "split") { moveSplit(d, e); return; }
+    if (!d.live) {
+      if (Math.abs(e.clientX - d.x0) + Math.abs(e.clientY - d.y0) < 5) return;
+      d.live = true;
+      lay.classList.add("dragging");
+      ghost.textContent = (d.kind === "move" ? "✥ " : "+ ") + d.label;
+      ghost.style.display = "block";
+      if (d.kind === "move") render();
+    }
+    ghost.style.left = (e.clientX + 14) + "px";
+    ghost.style.top = (e.clientY + 12) + "px";
+    d.t = targetAt(e.clientX, e.clientY);
+    if (!d.t) { dropEl.style.display = "none"; return; }
+    place(dropEl, d.t.rect);
+    dropEl.classList.toggle("bad", !d.t.ok);
+    dropEl.textContent = d.t.ok ? d.t.label : "no room";
+    dropEl.style.display = "flex";
+  }
+  function moveSplit(d, e) {
+    const n = d.sp.node, i = d.sp.i, total = d.sp.total, a0 = d.horiz ? 0 : 1;
+    const a = d.f0[i] * total, b = d.f0[i + 1] * total;
+    const minA = minSize(n.c[i])[a0], minB = minSize(n.c[i + 1])[a0];
+    let na = a + (d.horiz ? e.clientX : e.clientY) - d.start;
+    // honour both sides' minimums where they fit at all; on a screen too
+    // small for them, just keep either side from vanishing
+    na = minA + minB <= a + b ? clamp(na, minA, a + b - minB) : clamp(na, (a + b) * 0.1, (a + b) * 0.9);
+    n.f[i] = na / total;
+    n.f[i + 1] = (a + b - na) / total;
+    d.moved = true;
+    dashboard.panels.layout(VW, VH);
+    requestDraw();
+    render();
+  }
+  function endDrag() {
+    listen(false);
+    const d = drag;
+    drag = null;
+    document.body.style.cursor = "";
+    if (lay) {
+      lay.classList.remove("dragging");
+      ghost.style.display = "none";
+      dropEl.style.display = "none";
+    }
+    return d;
+  }
+  function onUp() {
+    const d = endDrag();
+    if (!d) return;
+    if (d.kind === "split") {
+      if (d.moved) {
+        const n = d.sp.node;
+        n.f = n.f.map(function (x) { return Number(x.toFixed(5)); });
+        pushUndo(d.before);
+        persistLater();
+        status("resized");
+      } else if (!d.before) {
+        S.layout = null;            // a click on a gap is not an edit
+        APPLY.layout();
+      }
+      render();
+      return;
+    }
+    if (!d.live) { if (d.kind === "add") autoAdd(d.type); else render(); return; }
+    if (d.t) drop(d, d.t); else render();
+  }
+  /** Abandons a drag in progress, putting back anything it changed. */
+  function cancel() {
+    const d = endDrag();
+    if (d && d.kind === "split") {
+      S.layout = d.before;
+      APPLY.layout();
+      requestDraw();
+    }
+    render();
+  }
+
+  /* ---- overlay ----------------------------------------------------------- */
+
+  function render() {
+    if (!active) return;
+    const old = lay.querySelectorAll(".hk-lp, .hk-sp, .hk-empty");
+    for (let i = 0; i < old.length; i++) old[i].remove();
+    const pm = dashboard.panels;
+    pm.leaves.forEach(function (l) {
+      const id = l.node.id;
+      const e = domEl("div", "hk-lp", lay);
+      place(e, l.r);
+      if (drag && drag.kind === "move" && drag.live && drag.id === id) e.classList.add("moving");
+      const c = domEl("div", "hk-lp-c", e);
+      domEl("span", null, c, panelName(id));
+      domEl("small", null, c, Math.round(l.r.w) + " × " + Math.round(l.r.h));
+      const x = domEl("div", "hk-lp-x", e, "✕");
+      x.title = "Remove from the layout";
+      x.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+      x.addEventListener("click", function () { removePanel(id); });
+      e.title = "Drag to move — onto an edge to dock, the middle to swap";
+      e.addEventListener("pointerdown", function (ev) {
+        startDrag(ev, { kind: "move", id: id, type: l.node.p, label: panelName(id) });
+      });
+    });
+    pm.splitters.forEach(function (sp, k) {
+      const horiz = sp.node.d === "h";
+      const e = domEl("div", "hk-sp " + (horiz ? "h" : "v"), lay);
+      // a 6px gap is a thin target; the grab area spills over both sides
+      const r = sp.r, pad = 4;
+      place(e, horiz ? { x: r.x - pad, y: r.y, w: r.w + pad * 2, h: r.h }
+                     : { x: r.x, y: r.y - pad, w: r.w, h: r.h + pad * 2 });
+      e.title = "Drag to resize";
+      e.addEventListener("pointerdown", function (ev) { startSplit(ev, k); });
+    });
+    if (!pm.leaves.length)
+      domEl("div", "hk-empty", lay, "The layout is empty — drag a panel from the list onto the screen, or click one.");
+    // how many of each are on screen — more are allowed, this just says so
+    const counts = {};
+    forEachLeaf(pm.root, function (l) { counts[l.p] = (counts[l.p] || 0) + 1; });
+    items.forEach(function (it) {
+      const n = counts[it.type] || 0;
+      it.count.textContent = n ? "×" + n : "";
+      it.el.classList.toggle("on", n > 0);
+    });
+  }
+
+  function buildPalette() {
+    pal = domEl("div", "hk-win hk-pal", document.body);
+    pal.setAttribute("role", "dialog");
+    pal.setAttribute("aria-label", "Layout editor");
+    const title = domEl("div", "hk-title", pal);
+    domEl("span", "t", title, "┃ LAYOUT // edit");
+    domEl("span", "hk-dot", title);
+    const x = domEl("span", "hk-x", title, "✕");
+    x.title = "Done (Esc)";
+    x.addEventListener("click", exit);
+    dragWindow(pal, title, x);
+
+    const tools = domEl("div", "hk-tools", pal);
+    const mk = function (label, tip, fn) {
+      const b = domEl("div", "hk-btn", tools, label);
+      b.tabIndex = 0; b.setAttribute("role", "button"); b.title = tip;
+      b.addEventListener("click", fn);
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+      });
+    };
+    mk("UNDO", "Undo the last change (Ctrl+Z)", doUndo);
+    mk("RESET", "Reset to the default layout", resetLayout);
+    mk("DONE", "Leave the editor (Esc)", exit);
+
+    const body = domEl("div", "hk-body", pal);
+    domEl("div", "hk-note", body,
+      "Drag a panel to move it: onto another panel's edge to dock beside it, onto its middle to swap, " +
+      "or onto the very edge of the screen to run along that side. Drag a gap to resize. ✕ removes.");
+    domEl("div", "hk-sh hk-sh-flat", body, "ADD PANEL");
+    domEl("div", "hk-note", body, "Drag one into place, or click it to split the largest panel.");
+    items = PANEL_TYPE_KEYS.map(function (type) {
+      const e = domEl("div", "hk-pi", body);
+      e.tabIndex = 0;
+      e.setAttribute("role", "button");
+      const top = domEl("div", "hk-pi-top", e);
+      domEl("b", null, top, "+ " + typeName(type));
+      const count = domEl("span", "n", top);
+      domEl("div", "d", e, PANEL_TYPES[type].desc);
+      e.addEventListener("pointerdown", function (ev) {
+        startDrag(ev, { kind: "add", type: type, label: typeName(type) });
+      });
+      e.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); autoAdd(type); }
+      });
+      return { type: type, el: e, count: count };
+    });
+
+    const foot = domEl("div", "hk-foot", pal);
+    statusEl = domEl("span", "hk-status", foot, "> editing layout");
+    domEl("span", null, foot, "Esc · Ctrl+Z");
+
+    const w = pal.offsetWidth, h = pal.offsetHeight;
+    pal.style.left = Math.round((window.innerWidth - w) / 2) + "px";
+    pal.style.top = Math.round((window.innerHeight - h) / 2) + "px";
+  }
+
+  /** Title-bar dragging for the palette window. */
+  function dragWindow(win, handle, skip) {
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0 || e.target === skip) return;
+      e.preventDefault();
+      const r = win.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
+      function move(ev) {
+        win.style.left = clamp(ev.clientX - ox, 0, Math.max(0, window.innerWidth - r.width)) + "px";
+        win.style.top = clamp(ev.clientY - oy, 0, Math.max(0, window.innerHeight - 40)) + "px";
+      }
+      function up() {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      }
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+  }
+
+  /* ---- mode ---------------------------------------------------------------- */
+
+  function enter() {
+    if (active || !dashboard) return;
+    fromSettings = Settings.isOpen();
+    Settings.close();
+    active = true;
+    undo = [];
+    lay = domEl("div", "hk-lay", document.body);
+    ["l", "r", "t", "b"].forEach(function (s) { domEl("div", "hk-edge " + s, lay); });
+    dropEl = domEl("div", "hk-drop", lay);
+    ghost = domEl("div", "hk-ghost", document.body);
+    buildPalette();
+    render();
+  }
+  function exit() {
+    if (!active) return;
+    if (drag) cancel();
+    active = false;
+    lay.remove(); pal.remove(); ghost.remove();
+    lay = pal = ghost = dropEl = statusEl = null;
+    items = [];
+    undo = [];
+    if (fromSettings) Settings.open();
+  }
+  /** Keys while editing; the global handler hands them all here. */
+  function key(e) {
+    const t = e.target;
+    const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+    if (e.key === "Escape") { e.preventDefault(); if (drag) cancel(); else exit(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (!drag) doUndo(); }
+    else if (!typing && (e.key === "l" || e.key === "L")) exit();
+  }
+
+  return {
+    enter: enter, exit: exit, key: key, refresh: render,
+    isActive: function () { return active; }
+  };
+})();
+
+/* ---------------------------------------------------------------------
    Bootstrap
    ------------------------------------------------------------------ */
 
 let dashboard = null;
-function onResize() { if (dashboard) dashboard.resized(); }
+function onResize() {
+  if (!dashboard) return;
+  dashboard.resized();
+  LayoutEditor.refresh();
+}
 
 // Precedence: a link's ?config= (decoded asynchronously, below), then this
 // machine's saved settings, then the defaults. A shared link must never be
@@ -3724,10 +4481,12 @@ window.addEventListener("resize", resize);
 window.addEventListener("keydown", function (e) {
   // F6 re-rolls the wallpaper, matching the MAUI build's keybind.
   if (e.key === "F6") { e.preventDefault(); dashboard.reroll(); requestDraw(); return; }
+  if (LayoutEditor.isActive()) { LayoutEditor.key(e); return; }
   // never while typing — an "h" in the scene-code box is just a letter
   const t = e.target;
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
   if (e.key === "h" || e.key === "H") Settings.toggle();
+  else if (e.key === "l" || e.key === "L") LayoutEditor.enter();
   else if (e.key === "Escape") Settings.escape();
 });
 
