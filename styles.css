@@ -66,7 +66,11 @@ h1{margin-top:10px;font-size:54px;font-weight:700;letter-spacing:-1.5px;color:va
 .tool-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* ---- grid ---- */
-.grid{display:grid;gap:30px;margin:14px 0 44px;grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Four half-width tracks, each card spanning two: the same two columns as
+   before, but a lone card on the last row can start one track in, centred. */
+.grid{display:grid;gap:30px;margin:14px 0 44px;grid-template-columns:repeat(4,minmax(0,1fr))}
+.grid>.card{grid-column:span 2}
+.grid>.card:last-child:nth-child(odd){grid-column:2 / span 2}
 .card{
   background:var(--card);
   border:1px solid var(--line);
@@ -188,6 +192,7 @@ h1{margin-top:10px;font-size:54px;font-weight:700;letter-spacing:-1.5px;color:va
   .page{padding:40px 22px 36px}
   h1{font-size:40px}
   .grid{grid-template-columns:minmax(0,1fr);gap:24px}
+  .grid>.card,.grid>.card:last-child:nth-child(odd){grid-column:auto}
   .intro{max-width:none}
   .howto-head{padding:20px 20px 14px}
   .howto-body{padding:18px 20px 22px}

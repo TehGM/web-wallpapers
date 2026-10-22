@@ -18,6 +18,7 @@ browser background or screensaver.
 |---|---|---|---|
 | [Black Hole](blackhole/) | `/blackhole/` | Released | https://wallpapers.tehgm.net/blackhole/ |
 | [Neonscape](neonscape/) | `/neonscape/` | Released | https://wallpapers.tehgm.net/neonscape/ |
+| [SYNAPSE//9](hacker/) | `/hacker/` | Released | https://wallpapers.tehgm.net/hacker/ |
 
 Released wallpapers keep their saved links and scenes working across updates.
 

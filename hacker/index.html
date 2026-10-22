@@ -706,8 +706,11 @@ const Logos = (function () {
    Settings — state and persistence
    ------------------------------------------------------------------ */
 
-/* Every user-facing knob lives in S. The shape is free to change: this
-   wallpaper is unreleased, so there are no saves to stay compatible with.
+/* Every user-facing knob lives in S. The wallpaper is released, so its
+   shape is a public contract: saved settings and shared links must keep
+   loading and keep their look. A new key needs a default that reproduces
+   the old behaviour (mergeInto then leaves old saves valid); a renamed or
+   reinterpreted key needs a migration, never a silent change of meaning.
    What the panel shows for each key — label, range, which applier runs —
    is declared once in SETTINGS_SCHEMA further down.
 

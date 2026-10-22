@@ -101,7 +101,7 @@ that serializes.
 | --- | --- | --- |
 | `blackhole/` | Released | **Required** |
 | `neonscape/` | Released | **Required** |
-| `hacker/` | WIP, not released | Not required |
+| `hacker/` | Released | **Required** |
 
 **Not yet released — ignore save compatibility entirely.** No version fields, no
 legacy-key shims, no migration paths. Rename, restructure and drop state keys
@@ -167,6 +167,29 @@ between the two draws. Two traps found this way in `hacker/`:
 Per-function timings mis-attribute GPU-queued work: `hacker/`'s panel-frame
 drawing profiled at 0.06 ms/frame and actually cost 0.62 ms, so a "cheap"
 component was nearly removed. Ablate and re-measure the whole frame.
+
+**"Identical output" means a pixel diff of zero, and many plausible
+optimisations fail it.** In Canvas 2D on this GPU path, each of these moved
+pixels by 1–2 code values in `hacker/`, invisible to the eye but not
+identical: setting a matrix with `setTransform` instead of the
+`translate`+`scale` that built it; repainting part of a cache under a clip
+(any clip, simple or compound) instead of all of it; filling only the
+non-transparent part of a gradient; cropping a cached image; composing in an
+offscreen canvas and copying it 1:1. Caching strings, fonts and `Path2D`s,
+skipping no-op draws, and freeing canvases came out exact. When the user asks
+for identical output, measure each change on its own and drop what diffs.
+
+**A test harness must not hurt the machine it runs on.** Kill a headless
+browser's whole process tree (`taskkill /T` on Windows), on every exit path
+including errors, and count leftovers after a run — killing only the launcher
+leaked renderer and GPU processes until about a hundred of them froze the
+user's PC. Run one browser at a time.
+
+**Wait for asynchronous assets, not for a fixed time.** An A/B that slept a
+fixed 2.5 s before stepping produced whole-screen "diffs" whenever the
+machine was loaded and one run's background image arrived late. Poll for the
+asset (the image `complete`) before the first stepped frame, and confirm a
+page against itself before trusting a diff against something else.
 
 To test against a live embedded host, Wallpaper Engine's `config.json` sets
 `--remote-debugging-port=8887 --remote-allow-origins=*`, so the running wallpaper

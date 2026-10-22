@@ -22,8 +22,10 @@ Three names, deliberately: the folder is `hacker/`, the Wallpaper Engine
 title in [project.json](project.json) is **SYNAPSE//9**, and the page's own
 `<title>` is the in-fiction `SYNAPSE//9 NODE CONSOLE`.
 
-**Status: work in progress, not released** — not in the gallery yet, and no
-save-compatibility obligations (see the table in the root `CLAUDE.md`).
+**Status: released** — in the gallery as SYNAPSE//9. Saved settings, scene
+codes and shared links are a public contract from here on: they must keep
+loading and keep their look across updates (see the save-compatibility rules
+in the root `CLAUDE.md`).
 
 ## Settings
 
