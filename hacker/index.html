@@ -7,10 +7,145 @@
 <style>
   html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;}
   canvas{display:block;width:100vw;height:100vh;}
+
+  /* Settings UI. Styled as one more window of the console: the panel fill,
+     neon border and title bar of Panel.render, in the same mono face.
+     Plain DOM only — no <select> and no native dialogs, both of which kill
+     Wallpaper Engine's CEF outright (see makeSelect). No backdrop-filter
+     either: blurring a canvas that changes every frame re-blurs every frame. */
+  :root{
+    --hk-g:#3CFF7A; --hk-dg:#1E9A4C; --hk-c:#2BE8F4; --hk-w:#D8FFE8;
+    --hk-gr:#5E7A70; --hk-l:#9FC8B0; --hk-r:#FF3B4A;
+    --hk-line:rgba(60,255,122,.18);
+    --hk-mono:"Consolas","Cascadia Mono","DejaVu Sans Mono","Courier New",monospace;
+  }
+  /* Sits in the title bar of whichever panel holds the top-right corner,
+     left of its status dot: top = layout margin, height = TITLE_BAR_H. */
+  .hk-cfg{
+    position:fixed; top:8px; right:24px; z-index:10; height:18px; padding:0 8px;
+    font:700 12px/18px var(--hk-mono); color:var(--hk-gr); cursor:pointer;
+    user-select:none; opacity:.7; transition:opacity .2s, color .2s;
+  }
+  .hk-cfg:hover, .hk-cfg:focus-visible, .hk-cfg.on{ opacity:1; color:var(--hk-g); outline:none; }
+  /* opacity 0 still hit-tests, so hovering the spot brings it back with no
+     script — the only way back in a host that forwards no keyboard */
+  .hk-cfg.hover{ opacity:0; }
+  .hk-cfg.hover:hover, .hk-cfg.hover:focus-visible, .hk-cfg.hover.on{ opacity:1; }
+
+  /* placed by script: centred when opened, wherever it was dragged after */
+  .hk-win{
+    position:fixed; left:0; top:0; z-index:20; width:300px;
+    max-height:calc(100vh - 32px); box-sizing:border-box;
+    display:flex; flex-direction:column;
+    background:rgba(7,13,16,.95); border:1px solid rgba(60,255,122,.9); border-radius:4px;
+    box-shadow:0 0 0 2px rgba(60,255,122,.16), 0 12px 40px rgba(0,0,0,.65);
+    color:var(--hk-w); font:11px/1.35 var(--hk-mono);
+  }
+  .hk-title{
+    flex:none; height:18px; display:flex; align-items:center; padding:0 2px 0 6px;
+    background:rgba(60,255,122,.10); color:var(--hk-g);
+    font-weight:700; font-size:10px; cursor:move; user-select:none;
+  }
+  .hk-title .t{ flex:1; white-space:nowrap; overflow:hidden; }
+  .hk-dot{
+    width:5px; height:5px; border-radius:50%; background:var(--hk-g); margin:0 6px;
+    animation:hk-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes hk-pulse{ 50%{ opacity:.35; } }
+  .hk-x{ cursor:pointer; color:var(--hk-gr); padding:0 5px; }
+  .hk-x:hover{ color:var(--hk-r); }
+
+  .hk-tools{
+    flex:none; display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px;
+    border-bottom:1px solid var(--hk-line);
+  }
+  .hk-btn{
+    flex:1 1 auto; padding:3px 8px; border-radius:2px; cursor:pointer; text-align:center;
+    border:1px solid rgba(60,255,122,.35); background:rgba(60,255,122,.05);
+    color:var(--hk-g); font:700 10px/1.4 var(--hk-mono); white-space:nowrap; user-select:none;
+  }
+  .hk-btn:hover, .hk-btn:focus-visible{ background:rgba(60,255,122,.16); outline:none; }
+
+  .hk-body{
+    flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 8px 8px;
+    scrollbar-width:thin; scrollbar-color:var(--hk-dg) transparent;
+  }
+  .hk-sh{
+    margin:9px 0 2px; color:var(--hk-c); font-weight:700; font-size:10px;
+    letter-spacing:.06em; cursor:pointer; user-select:none;
+  }
+  .hk-sh::before{ content:"\25BE  "; }
+  .hk-sec.closed .hk-sh::before{ content:"\25B8  "; }
+  .hk-sec.closed .hk-rows{ display:none; }
+  .hk-row{ margin:6px 0; }
+  .hk-row.dis{ opacity:.4; }
+  .hk-lab{ display:flex; justify-content:space-between; gap:8px; color:var(--hk-l); margin-bottom:1px; }
+  .hk-val{ color:var(--hk-g); cursor:text; border-bottom:1px dotted transparent; }
+  .hk-val:hover, .hk-val:focus-visible{ border-bottom-color:var(--hk-g); outline:none; }
+  .hk-row.dis .hk-val{ cursor:default; border-bottom-color:transparent; }
+  .hk-edit{
+    width:72px; height:15px; box-sizing:border-box; margin:0; padding:0 4px; text-align:right;
+    border:1px solid var(--hk-g); border-radius:2px; background:rgba(0,0,0,.45);
+    color:var(--hk-g); font:inherit; outline:none;
+  }
+  .hk-row input[type=range]{ display:block; width:100%; height:14px; margin:0; accent-color:var(--hk-g); }
+  .hk-chk{ display:flex; align-items:center; gap:6px; position:relative; cursor:pointer; color:var(--hk-l); }
+  /* the native box stays in charge of state and keyboard; only its look is replaced */
+  .hk-chk input{ position:absolute; left:0; opacity:0; width:1px; height:1px; margin:0; }
+  .hk-box::before{ content:"[ ]"; color:var(--hk-dg); }
+  .hk-chk input:checked + .hk-box::before{ content:"[x]"; color:var(--hk-g); }
+  .hk-chk input:focus-visible + .hk-box{ outline:1px solid var(--hk-g); }
+  .hk-note{ margin:6px 0; color:var(--hk-gr); line-height:1.45; }
+
+  /* Dropdown built from plain divs — see makeSelect(). */
+  .hk-sel{
+    position:relative; padding:2px 18px 2px 6px; cursor:pointer;
+    border:1px solid rgba(60,255,122,.35); background:rgba(60,255,122,.05); color:var(--hk-w);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .hk-sel::after{
+    content:""; position:absolute; right:6px; top:50%; margin-top:-2px;
+    border:4px solid transparent; border-top-color:var(--hk-g);
+  }
+  .hk-sel:focus-visible{ outline:1px solid var(--hk-g); }
+  .hk-opts{
+    position:fixed; z-index:40; padding:2px; max-height:40vh; overflow-y:auto;
+    background:#070D10; border:1px solid rgba(60,255,122,.6);
+    box-shadow:0 8px 24px rgba(0,0,0,.6); color:var(--hk-w); font:11px/1.35 var(--hk-mono);
+  }
+  .hk-opt{ padding:3px 8px; cursor:pointer; white-space:nowrap; }
+  .hk-opt:hover{ background:rgba(60,255,122,.14); }
+  .hk-opt.sel{ color:var(--hk-g); }
+  .hk-opt.sel::before{ content:"> "; }
+
+  .hk-foot{
+    flex:none; display:flex; gap:8px; padding:3px 8px; font-size:10px;
+    border-top:1px solid var(--hk-line); color:var(--hk-gr);
+  }
+  .hk-status{ flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--hk-dg); }
+
+  .hk-modal{
+    position:fixed; inset:0; z-index:30; display:none;
+    align-items:center; justify-content:center; background:rgba(0,0,0,.55);
+  }
+  .hk-modal.show{ display:flex; }
+  .hk-modal .hk-win{ position:static; width:min(520px, calc(100vw - 32px)); max-height:none; }
+  .hk-card{ padding:8px; }
+  .hk-card p{ margin:0 0 8px; color:var(--hk-l); line-height:1.45; }
+  .hk-card textarea{
+    width:100%; height:120px; box-sizing:border-box; resize:vertical; padding:6px;
+    word-break:break-all; border:1px solid rgba(60,255,122,.35); border-radius:2px;
+    background:rgba(0,0,0,.4); color:var(--hk-g); font:11px/1.4 var(--hk-mono);
+  }
+  .hk-card textarea:focus{ outline:1px solid var(--hk-g); }
+  .hk-cardfoot{ display:flex; align-items:center; gap:6px; margin-top:8px; }
+  .hk-cardfoot .hk-status{ flex:1; }
+  .hk-cardfoot .hk-btn{ flex:none; }
 </style>
 </head>
 <body>
 <canvas id="screen"></canvas>
+<div class="hk-cfg" id="hk-cfg" role="button" tabindex="0" title="Settings (H)">&#9881; CFG</div>
 <script>
 "use strict";
 /* =====================================================================
@@ -381,6 +516,152 @@ const Logos = (function () {
 })();
 
 /* ---------------------------------------------------------------------
+   Settings — state and persistence
+   ------------------------------------------------------------------ */
+
+/* Every user-facing knob lives in S. The shape is free to change: this
+   wallpaper is unreleased, so there are no saves to stay compatible with.
+   What the panel shows for each key — label, range, which applier runs —
+   is declared once in SETTINGS_SCHEMA further down.
+
+   fx strengths are multiples of the original look: 1 reproduces it
+   exactly, 0 switches the effect off and skips its draw entirely. */
+const FPS_CAP_MAX = 240;
+const DEFAULTS = {
+  fx:   { scan: 1, scanDrift: 1, band: 1, bandSpeed: 1, flicker: 1, glitch: 1, vignette: 1 },
+  anim: { speed: 1 },
+  perf: { fpsCap: 60, fpsOverride: false, dprCap: 2 },
+  ui:   { button: "dim" }
+};
+function cloneState(o) { return JSON.parse(JSON.stringify(o)); }
+let S = cloneState(DEFAULTS);
+
+function getPath(o, path) {
+  const p = path.split(".");
+  for (let i = 0; i < p.length; i++) o = o[p[i]];
+  return o;
+}
+function setPath(o, path, v) {
+  const p = path.split(".");
+  for (let i = 0; i < p.length - 1; i++) o = o[p[i]];
+  o[p[p.length - 1]] = v;
+}
+
+/** Copies from `src` only the keys `dst` already declares, with the same
+ *  type, so a hand-edited or stale save can never introduce state the
+ *  wallpaper does not expect. Ranges are enforced afterwards, by
+ *  sanitizeState(), from the schema. */
+function mergeInto(dst, src) {
+  if (!src || typeof src !== "object") return dst;
+  const keys = Object.keys(dst);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
+    const d = dst[k], v = src[k];
+    if (d && typeof d === "object") {
+      if (v && typeof v === "object" && !Array.isArray(v)) mergeInto(d, v);
+    } else if (typeof v === typeof d && (typeof v !== "number" || Number.isFinite(v))) {
+      dst[k] = v;
+    }
+  }
+  return dst;
+}
+
+/** Only the leaves that differ from the defaults, or undefined when none
+ *  do. Saves and links carry this rather than the whole state, so they
+ *  stay short and a retuned default reaches everyone who never touched it. */
+function diffState(cur, def) {
+  let out;
+  const keys = Object.keys(def);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i], d = def[k], c = cur[k];
+    const v = d && typeof d === "object" ? diffState(c, d) : (c !== d ? c : undefined);
+    if (v !== undefined) (out || (out = {}))[k] = v;
+  }
+  return out;
+}
+
+/* Scene codes: the same format as Black Hole's and Neonscape's —
+   'z' + deflate, or 'j' + plain JSON where CompressionStream is missing,
+   both base64url so they survive a query string untouched. */
+function b64url(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function unb64url(str) {
+  const s = atob(str.replace(/-/g, "+").replace(/_/g, "/"));
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+async function encodeConfig(obj) {
+  const json = JSON.stringify(obj);
+  try {
+    const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("deflate"));
+    return "z" + b64url(new Uint8Array(await new Response(stream).arrayBuffer()));
+  } catch (_) {
+    return "j" + b64url(new TextEncoder().encode(json));
+  }
+}
+async function decodeConfig(str) {
+  const mode = str[0], data = unb64url(str.slice(1));
+  if (mode === "z") {
+    const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return JSON.parse(await new Response(stream).text());
+  }
+  if (mode === "j") return JSON.parse(new TextDecoder().decode(data));
+  throw new Error("unrecognized scene code");
+}
+
+/* A wallpaper host serves local wallpapers from file://, and Chromium gives
+   every file:// page ONE shared localStorage origin — so this key shares a
+   namespace with every other wallpaper on the machine. Hence the vendor
+   prefix. */
+const LS_KEY = "tehgm.hacker.state";
+function readLocalState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+/** The address bar's ?config=, or "" — a link always wins over local state. */
+const BOOT_CODE = (function () {
+  try { return new URLSearchParams(location.search).get("config") || ""; }
+  catch (_) { return ""; }
+})();
+
+/* One choke point for "the settings changed": localStorage, so a host that
+   opens index.html with no query comes back to them, and the address bar,
+   so it is always a link to exactly this look. replaceState throws on a
+   file:// page, where there is no address bar worth keeping anyway. */
+let persistTimer = 0, persistSeq = 0;
+function persistLater() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(persistNow, 400);
+}
+/** Resolves to the scene code of the current state ("" at defaults). */
+async function persistNow() {
+  clearTimeout(persistTimer);
+  const seq = ++persistSeq;
+  const d = diffState(S, DEFAULTS);
+  try {
+    if (d) localStorage.setItem(LS_KEY, JSON.stringify(d));
+    else localStorage.removeItem(LS_KEY);
+  } catch (_) {}
+  const code = d ? await encodeConfig(d) : "";
+  // a newer edit has already started its own write; let that one land
+  if (seq === persistSeq) {
+    try {
+      history.replaceState(null, "", location.pathname + (code ? "?config=" + code : "") + location.hash);
+    } catch (_) {}
+  }
+  return code;
+}
+
+/* ---------------------------------------------------------------------
    Canvas bootstrap
    ------------------------------------------------------------------ */
 
@@ -409,11 +690,19 @@ let ctx = canvas.getContext("2d", { alpha: true });
 const screenCtx = ctx;
 let VW = 0, VH = 0, DPR = 1;
 
+/* Set whenever something outside the animation changed the picture — a
+   resize, a setting. Only consulted while master speed is 0: the scene is
+   then frozen, and the loop redraws only when told to. */
+let frameDirty = true;
+function requestDraw() { frameDirty = true; }
+
+/** The device pixel ratio actually rendered at. Capped because as a
+ *  wallpaper this may run full-screen on a 4K panel, where rendering at 2x
+ *  costs 4x the fill rate for detail nobody looks at. */
+function targetDpr() { return Math.min(window.devicePixelRatio || 1, S.perf.dprCap); }
+
 function resize() {
-  // Cap the device pixel ratio: as a wallpaper this may run full-screen on
-  // a 4K panel, where rendering at 2x costs 4x the fill rate for detail
-  // nobody looks at.
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  DPR = targetDpr();
   VW = Math.max(320, window.innerWidth);
   VH = Math.max(240, window.innerHeight);
   canvas.width = Math.round(VW * DPR);
@@ -423,6 +712,7 @@ function resize() {
   _cwCache.clear();
   _blockCache.clear();
   onResize();
+  requestDraw();
 }
 
 /** The same shape as roundRect(), built once into a reusable Path2D.
@@ -2572,11 +2862,50 @@ class Dashboard {
   constructor() {
     this.panels = new PanelManager();
     this.bg = new BackgroundLayer(pick(BG_KEYS));
-    this.time = 0;
+    // Phases rather than one clock, so a speed setting changing mid-run
+    // changes the rate from here on instead of jumping the position.
+    this.scanPhase = 0; this.bandPhase = 0;
     this.flickerTimer = 3; this.flickerLeft = 0;
     this.glitchTimer = 5; this.glitchLeft = 0; this.glitchY = 0;
     this.scanPattern = null;
     this.vignette = null;
+    this.bandFill = ""; this.flickerFill = "";
+    this.rebuildFx();
+  }
+  /** Re-derives everything the overlays draw with from S.fx. None of it
+   *  depends on the screen size (the vignette is drawn in a unit square
+   *  scaled to the screen), so this runs on a settings change only. A
+   *  strength of 0 leaves the asset null and its draw is skipped. */
+  rebuildFx() {
+    const fx = S.fx;
+
+    // Scanlines as a 4px-tall repeating pattern: one fillRect per frame
+    // instead of a DrawLine for every fourth row of a 4K screen.
+    this.scanPattern = null;
+    if (fx.scan > 0) {
+      const pc = document.createElement("canvas");
+      pc.width = 1; pc.height = 4;
+      const px = pc.getContext("2d");
+      px.fillStyle = "rgba(0,0,0," + Math.min(1, 0.10 * fx.scan) + ")";
+      px.fillRect(0, 0, 1, 1);
+      this.scanPattern = screenCtx.createPattern(pc, "repeat");
+    }
+
+    this.vignette = null;
+    if (fx.vignette > 0) {
+      const g = screenCtx.createRadialGradient(0, 0, 0, 0, 0, 0.75);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(0.75, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0," + Math.min(1, 0.35 * fx.vignette) + ")");
+      this.vignette = g;
+    }
+
+    // Built directly rather than through fade(), whose 1/64 alpha steps
+    // would turn these faint fills into a staircase. The band's base alpha
+    // is 1/64 because that is what fade(Green, 0.025) quantised it to.
+    const G = T.Green;
+    this.bandFill = "rgba(" + G.r + "," + G.g + "," + G.b + "," + (fx.band / 64) + ")";
+    this.flickerFill = "rgba(255,255,255," + Math.min(1, 0.03 * fx.flicker) + ")";
   }
   /** Swaps in a different wallpaper without reloading, punctuated with a
    *  glitch burst so the change reads as intentional. Never re-rolls onto
@@ -2595,24 +2924,11 @@ class Dashboard {
     this.panels.layout(VW, VH);
     this.panels.invalidateAll();
     this.bg.invalidate();
-
-    // Scanlines as a 4px-tall repeating pattern: one fillRect per frame
-    // instead of a DrawLine for every fourth row of a 4K screen.
-    const pc = document.createElement("canvas");
-    pc.width = 1; pc.height = 4;
-    const px = pc.getContext("2d");
-    px.fillStyle = "rgba(0,0,0,0.10)";
-    px.fillRect(0, 0, 1, 1);
-    this.scanPattern = ctx.createPattern(pc, "repeat");
-
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.75);
-    g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(0.75, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.35)");
-    this.vignette = g;
   }
   update(dt) {
-    this.time += dt;
+    const fx = S.fx;
+    this.scanPhase = (this.scanPhase + dt * 12 * fx.scanDrift) % 4;
+    this.bandPhase = (this.bandPhase + dt * 0.09 * fx.bandSpeed) % 1.25;
     this.panels.update(dt);
     this.bg.update(dt);
 
@@ -2622,8 +2938,10 @@ class Dashboard {
       this.flickerTimer = 4 + rnd() * 9;
       this.flickerLeft = 0.06 + rnd() * 0.08;
     }
+    // Frequency scales how fast the countdown runs, so 0 simply never
+    // fires — F6's own burst still plays.
     this.glitchLeft -= dt;
-    this.glitchTimer -= dt;
+    this.glitchTimer -= dt * fx.glitch;
     if (this.glitchTimer <= 0) {
       this.glitchTimer = 6 + rnd() * 12;
       this.glitchLeft = 0.10 + rnd() * 0.15;
@@ -2644,8 +2962,9 @@ class Dashboard {
   }
   drawOverlays() {
     // Slowly drifting scanlines — subtle so text stays readable.
+    const fx = S.fx;
     if (this.scanPattern) {
-      const phase = (this.time * 12) % 4;
+      const phase = this.scanPhase;
       ctx.save();
       ctx.translate(0, phase);
       ctx.fillStyle = this.scanPattern;
@@ -2654,12 +2973,14 @@ class Dashboard {
     }
 
     // A brighter "refresh band" sweeping down the screen.
-    const bandY = ((this.time * 0.09) % 1.25) * VH * 1.25 - VH * 0.125;
-    ctx.fillStyle = fade(T.Green, 0.025);
-    ctx.fillRect(0, bandY, VW, VH * 0.10);
+    if (fx.band > 0) {
+      const bandY = this.bandPhase * VH * 1.25 - VH * 0.125;
+      ctx.fillStyle = this.bandFill;
+      ctx.fillRect(0, bandY, VW, VH * 0.10);
+    }
 
-    if (this.flickerLeft > 0) {
-      ctx.fillStyle = "rgba(255,255,255,0.03)";
+    if (this.flickerLeft > 0 && fx.flicker > 0) {
+      ctx.fillStyle = this.flickerFill;
       ctx.fillRect(0, 0, VW, VH);
     }
 
@@ -2685,16 +3006,729 @@ class Dashboard {
 }
 
 /* ---------------------------------------------------------------------
+   Settings — schema
+   ------------------------------------------------------------------ */
+
+/* Everything the settings panel shows, in order. A section is
+   { id, title, apply?, closed?, rows }; a row is { kind, label, path, ... }
+   where `kind` names a builder in ROW_KINDS (range, check, select, note,
+   button). Optional on any row: tip (hover text), show(s) / dis(s)
+   predicates re-evaluated on every change, and apply, overriding the
+   section's. `apply` names an entry of APPLY, run after the value lands.
+   A range row also takes `unit` (see U_PCT), which sets both how its value
+   reads and how a typed value is understood.
+
+   Adding a setting is: a key in DEFAULTS, a row here, and — if the
+   wallpaper has to rebuild something for it — an applier. Ranges declared
+   here are also what sanitizeState() clamps loaded values to. */
+
+/* How a ranged value reads and is typed. It shows as value * scale to `dp`
+   decimals plus `suffix`, with `zero` in place of the number at 0; typing
+   uses the same units, so 137 in a percentage field means 1.37. `int`
+   rounds typed values to whole units. */
+const U_PCT = { scale: 100, dp: 0, suffix: "%", zero: "off" };
+const U_MUL = { scale: 1, dp: 2, suffix: "x", zero: "stopped" };
+const U_SPEED = { scale: 1, dp: 2, suffix: "x", zero: "frozen" };
+const U_FPS = { scale: 1, dp: 0, suffix: "", zero: "uncapped", int: true };
+const U_NUM2 = { scale: 1, dp: 2, suffix: "" };
+
+/** Display number, to `dp` decimals unless a typed value carries more. */
+function unitNumber(u, v) {
+  const d = v * u.scale, s = d.toFixed(u.dp);
+  return Math.abs(Number(s) - d) < 1e-9 ? s : String(Number(d.toFixed(u.dp + 3)));
+}
+function unitShow(u, v) { return v <= 0 && u.zero ? u.zero : unitNumber(u, v) + u.suffix; }
+function unitEditText(u, v) { return String(Number((v * u.scale).toFixed(6))); }
+/** Typed text -> value, or NaN. Accepts a decimal comma, the unit's own
+ *  suffix and its zero word ("off"). */
+function unitParse(u, text) {
+  const t = String(text).trim().toLowerCase().replace(",", ".");
+  if (u.zero && t === u.zero) return 0;
+  const num = t.replace(/\s*[%x×]$/, "");
+  if (!num || !/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/.test(num)) return NaN;
+  const v = Number(num) / u.scale;
+  return u.int ? Math.round(v) : Number(v.toFixed(6));
+}
+
+const SETTINGS_SCHEMA = [
+  { id: "fx", title: "CRT // OVERLAY", apply: "fx", rows: [
+    { kind: "range", label: "Scanlines", path: "fx.scan", min: 0, max: 3, step: 0.05, unit: U_PCT,
+      tip: "Darkness of the CRT scanline pattern. 100% is the original look." },
+    { kind: "range", label: "Scanline drift", path: "fx.scanDrift", min: 0, max: 4, step: 0.05, unit: U_MUL,
+      tip: "How fast the scanlines crawl down the screen.",
+      show: function (s) { return s.fx.scan > 0; } },
+    { kind: "range", label: "Refresh band", path: "fx.band", min: 0, max: 4, step: 0.05, unit: U_PCT,
+      tip: "The faint bright band that sweeps down the screen." },
+    { kind: "range", label: "Band speed", path: "fx.bandSpeed", min: 0, max: 4, step: 0.05, unit: U_MUL,
+      show: function (s) { return s.fx.band > 0; } },
+    { kind: "range", label: "Flicker", path: "fx.flicker", min: 0, max: 3, step: 0.05, unit: U_PCT,
+      tip: "Brightness of the brief whole-screen flickers, every few seconds." },
+    { kind: "range", label: "Glitch bars", path: "fx.glitch", min: 0, max: 4, step: 0.05, unit: U_PCT,
+      tip: "How often cyan/red glitch bars tear across the screen. Off still lets F6 glitch." },
+    { kind: "range", label: "Vignette", path: "fx.vignette", min: 0, max: 2.5, step: 0.05, unit: U_PCT,
+      tip: "Darkening towards the screen corners." }
+  ]},
+  { id: "anim", title: "ANIMATION", rows: [
+    { kind: "range", label: "Master speed", path: "anim.speed", min: 0, max: 3, step: 0.05,
+      unit: U_SPEED,
+      tip: "Scales everything that moves: typing, scrolling, breaches, overlays. " +
+           "0 freezes the screen, and a frozen screen is not redrawn at all." }
+  ]},
+  { id: "perf", title: "PERFORMANCE", apply: "perf", rows: [
+    { kind: "check", label: "Override WE FPS limit", path: "perf.fpsOverride",
+      tip: "Wallpaper Engine limits the frame rate of the whole desktop, and by default " +
+           "that limit owns the cap below. Tick this to set this wallpaper's own cap.",
+      show: function () { return hostFps >= 0; } },
+    { kind: "range", label: "FPS cap", path: "perf.fpsCap", min: 0, max: FPS_CAP_MAX, step: 1,
+      unit: U_FPS,
+      tip: "Highest frame rate drawn. Everything is time-based, so a lower cap only " +
+           "makes motion less smooth, and costs proportionally less.",
+      dis: function (s) { return hostFps >= 0 && !s.perf.fpsOverride; } },
+    { kind: "range", label: "Pixel-ratio cap", path: "perf.dprCap", min: 0.5, max: 2, step: 0.05,
+      unit: U_NUM2, live: false,
+      tip: "Highest device pixel ratio rendered at. On a high-DPI or scaled display, " +
+           "cost grows with its square; below the display's own ratio, text turns soft." }
+  ]},
+  { id: "ui", title: "INTERFACE", apply: "ui", rows: [
+    { kind: "select", label: "Settings button", path: "ui.button",
+      options: [["dim", "dim"], ["hover", "hidden until hovered"]],
+      tip: "The CFG button in the top-right title bar. Hidden, it reappears when the " +
+           "mouse is over its spot, so the panel stays reachable without a keyboard." }
+  ]}
+];
+
+function forEachSettingRow(fn) {
+  for (let i = 0; i < SETTINGS_SCHEMA.length; i++) {
+    const sec = SETTINGS_SCHEMA[i];
+    for (let j = 0; j < sec.rows.length; j++) fn(sec.rows[j], sec);
+  }
+}
+/** Clamps every ranged value and drops unknown choices, in place. */
+function sanitizeState(s) {
+  forEachSettingRow(function (row) {
+    if (!row.path) return;
+    const v = getPath(s, row.path);
+    if (row.kind === "range") setPath(s, row.path, clamp(v, row.min, row.max));
+    else if (row.kind === "select" && !row.options.some(function (o) { return o[0] === v; }))
+      setPath(s, row.path, getPath(DEFAULTS, row.path));
+  });
+}
+
+/* What has to happen after a value changes, by group. Anything read
+   straight from S every frame (master speed) needs no entry. */
+const APPLY = {
+  fx: function () { if (dashboard) dashboard.rebuildFx(); },
+  perf: function () {
+    // turning the override off hands the cap straight back to the host
+    if (applyHostFps()) Settings.refresh();
+    if (dashboard && targetDpr() !== DPR) resize();
+  },
+  ui: function () { Settings.syncButton(); }
+};
+function applyAll() {
+  const k = Object.keys(APPLY);
+  for (let i = 0; i < k.length; i++) APPLY[k[i]]();
+  requestDraw();
+}
+
+/** Replaces the whole state: defaults, then `obj` merged over them. */
+function loadState(obj, persist) {
+  S = cloneState(DEFAULTS);
+  mergeInto(S, obj);
+  sanitizeState(S);
+  // an imported state brings its own override switch — the host's limit
+  // takes the cap straight back if it arrived turned off
+  if (applyHostFps() || persist !== false) persistLater();
+  applyAll();
+  Settings.refresh();
+}
+
+/* ---------------------------------------------------------------------
+   Settings — panel
+   ------------------------------------------------------------------ */
+
+// Fed from the frame loop while the panel is open, null otherwise.
+let fpsMeter = null;
+
+/* Nothing of the panel exists until it is first opened: closed, the only
+   cost is the one CFG element and its click handler. */
+const Settings = (function () {
+  const cfgBtn = document.getElementById("hk-cfg");
+  let win = null, statusEl = null, fpsEl = null;
+  let bindings = [];
+  let isOpen = false;
+  let closePop = null;            // closes whichever dropdown list is open
+
+  function el(tag, cls, parent, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function onActivate(e, fn) {
+    e.addEventListener("click", fn);
+    e.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); fn(); }
+    });
+  }
+  function mkButton(parent, label, title) {
+    const b = el("div", "hk-btn", parent, label);
+    b.tabIndex = 0;
+    b.setAttribute("role", "button");
+    if (title) b.title = title;
+    return b;
+  }
+
+  /* Actions above the sections. An entry either runs, or opens a menu of
+     [value, label, run] items. */
+  const TOOLBAR = [
+    { label: "IMPORT ▾", title: "Import settings", menu: [
+      ["code", "Scene code…", function () { CodeBox.open("import"); }],
+      ["json", "JSON file…", function () { pickJson(); }]
+    ]},
+    { label: "EXPORT ▾", title: "Export settings", menu: [
+      ["link", "Wallpaper link", function () { copyLink(); }],
+      ["code", "Scene code…", function () { CodeBox.open("export"); }],
+      ["json", "JSON file", function () { downloadJson(); }]
+    ]},
+    { label: "RESET", title: "Restore every setting to its default",
+      run: function () { loadState({}); status("defaults restored"); } }
+  ];
+
+  /* ---- row builders ------------------------------------------------
+     Each returns a binding { row, rowEl, input, sync }, where sync()
+     pulls the control back in line with S. */
+  const ROW_KINDS = {
+    range: function (parent, row, sec) {
+      const r = el("div", "hk-row", parent);
+      const lab = el("div", "hk-lab", r);
+      el("span", null, lab, row.label);
+      const val = el("span", "hk-val", lab);
+      val.tabIndex = 0;
+      val.setAttribute("role", "button");
+      val.title = "Click to type an exact value";
+      const inp = el("input", null, r);
+      inp.type = "range";
+      inp.min = row.min; inp.max = row.max; inp.step = row.step;
+      inp.setAttribute("aria-label", row.label);
+      const u = row.unit || U_NUM2;
+      // `live: false` commits on release only, for settings that rebuild
+      // something expensive (a resize re-bakes the background)
+      inp.addEventListener("input", function () {
+        const v = parseFloat(inp.value);
+        val.textContent = unitShow(u, v);
+        if (row.live !== false) commit(row, sec, v);
+      });
+      if (row.live === false)
+        inp.addEventListener("change", function () { commit(row, sec, parseFloat(inp.value)); });
+
+      /* The readout doubles as a text field for exact values: the slider
+         snaps to its step, a typed value does not. The slider then shows
+         its nearest step while the setting keeps what was typed. */
+      function edit() {
+        if (inp.disabled) return;
+        const box = el("input", "hk-edit");
+        box.type = "text";
+        box.spellcheck = false;
+        box.inputMode = "decimal";
+        box.setAttribute("aria-label", row.label);
+        box.value = unitEditText(u, getPath(S, row.path));
+        val.replaceWith(box);
+        box.focus();
+        box.select();
+        let done = false;
+        function finish(accept, refocus) {
+          if (done) return;
+          done = true;
+          if (accept) {
+            const v = unitParse(u, box.value);
+            if (isNaN(v)) status("not a number: " + box.value.trim());
+            else {
+              const c = clamp(v, row.min, row.max);
+              if (c !== v) status(row.label.toLowerCase() + " limited to " +
+                                  unitNumber(u, row.min) + "–" + unitNumber(u, row.max) + u.suffix);
+              if (c !== getPath(S, row.path)) commit(row, sec, c);
+            }
+          }
+          box.replaceWith(val);
+          sync();
+          if (refocus) val.focus();
+        }
+        box.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") { e.preventDefault(); finish(true, true); }
+          else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false, true); }
+        });
+        box.addEventListener("blur", function () { finish(true, false); });
+      }
+      val.addEventListener("click", edit);
+      val.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edit(); }
+      });
+
+      function sync() {
+        const v = getPath(S, row.path);
+        inp.value = v;
+        val.textContent = unitShow(u, v);
+      }
+      return { row: row, rowEl: r, input: inp, sync: sync };
+    },
+    check: function (parent, row, sec) {
+      const r = el("label", "hk-row hk-chk", parent);
+      const inp = el("input", null, r);
+      inp.type = "checkbox";
+      el("span", "hk-box", r);
+      el("span", null, r, row.label);
+      inp.addEventListener("change", function () { commit(row, sec, inp.checked); });
+      return { row: row, rowEl: r, input: inp, sync: function () {
+        inp.checked = !!getPath(S, row.path);
+      }};
+    },
+    select: function (parent, row, sec) {
+      const r = el("div", "hk-row", parent);
+      el("div", "hk-lab", r, row.label);
+      const sel = makeSelect(el("div", "hk-sel", r), row.options);
+      sel.el.setAttribute("aria-label", row.label);
+      sel.onChange = function () { commit(row, sec, sel.value); };
+      return { row: row, rowEl: r, input: sel.el, sync: function () {
+        sel.value = getPath(S, row.path);
+      }};
+    },
+    note: function (parent, row) {
+      return { row: row, rowEl: el("div", "hk-note", parent, row.label), input: null, sync: null };
+    },
+    button: function (parent, row) {
+      const r = el("div", "hk-row", parent);
+      const b = mkButton(r, row.label, row.tip);
+      onActivate(b, row.run);
+      return { row: row, rowEl: r, input: b, sync: null };
+    }
+  };
+
+  function commit(row, sec, v) {
+    setPath(S, row.path, v);
+    const name = row.apply || sec.apply;
+    if (name && APPLY[name]) APPLY[name]();
+    requestDraw();
+    persistLater();
+    refreshVis();
+  }
+
+  function refreshVis() {
+    for (let i = 0; i < bindings.length; i++) {
+      const b = bindings[i], row = b.row;
+      if (row.show) b.rowEl.style.display = row.show(S) ? "" : "none";
+      if (row.dis && b.input) {
+        const d = !!row.dis(S);
+        b.rowEl.classList.toggle("dis", d);
+        if ("disabled" in b.input) b.input.disabled = d;
+        else b.input.setAttribute("aria-disabled", d ? "true" : "false");
+      }
+    }
+  }
+  /** Pulls every control back in line with S. Free while never opened. */
+  function refresh() {
+    if (!win) return;
+    for (let i = 0; i < bindings.length; i++) if (bindings[i].sync) bindings[i].sync();
+    refreshVis();
+  }
+
+  /* ---- dropdown ----------------------------------------------------
+     Stand-in for <select>, rendered as plain divs.
+
+     Wallpaper Engine runs the page in an off-screen CEF (Chromium 146), and
+     there a <select> kills the renderer with STATUS_ILLEGAL_INSTRUCTION the
+     instant it generates a layout box — styling or hiding one is not enough,
+     it must never reach layout. Same look and behaviour as the native
+     control: click or Enter/Space opens the list, arrows step through values
+     while closed, Escape (handled globally) or an outside click dismisses.
+
+     `o.menu` makes it a menu button: it keeps its own label, has no value,
+     and fires onChange on every pick, even the same entry twice. */
+  function makeSelect(trg, items, o) {
+    o = o || {};
+    trg.tabIndex = 0;
+    trg.setAttribute("role", o.menu ? "button" : "combobox");
+    trg.setAttribute("aria-haspopup", "listbox");
+    trg.setAttribute("aria-expanded", "false");
+    let value = o.menu ? "" : items[0][0];
+    let pop = null;
+    const api = {
+      el: trg,
+      onChange: function () {},
+      get value() { return value; },
+      set value(v) { value = v; paint(); }
+    };
+    function paint() {
+      if (o.menu) return;
+      const it = items.find(function (i) { return i[0] === value; });
+      trg.textContent = it ? it[1] : "";
+    }
+    function disabled() { return trg.getAttribute("aria-disabled") === "true"; }
+    function onOutside(e) {
+      if (e.target !== trg && pop && !pop.contains(e.target)) close();
+    }
+    function close() {
+      if (!pop) return;
+      pop.remove(); pop = null; closePop = null;
+      trg.setAttribute("aria-expanded", "false");
+      window.removeEventListener("mousedown", onOutside, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    }
+    // The panel scrolls and clips its content, so the list is positioned
+    // against the viewport on body instead of nested inside the row.
+    function open() {
+      if (pop) { close(); return; }
+      if (closePop) closePop();
+      pop = el("div", "hk-opts", document.body);
+      pop.setAttribute("role", "listbox");
+      const r = trg.getBoundingClientRect();
+      pop.style.minWidth = r.width + "px";
+      items.forEach(function (it) {
+        const opt = el("div", "hk-opt" + (it[0] === value ? " sel" : ""), pop, it[1]);
+        opt.setAttribute("role", "option");
+        opt.addEventListener("mousedown", function (e) { e.preventDefault(); pick(it[0]); });
+      });
+      // below the trigger, or flipped above it near the bottom of the screen
+      const ph = pop.offsetHeight, pw = pop.offsetWidth;
+      let top = r.bottom + 2;
+      if (top + ph > window.innerHeight - 4) {
+        const above = r.top - 2 - ph;
+        top = above >= 4 ? above : Math.max(4, window.innerHeight - 4 - ph);
+      }
+      pop.style.top = top + "px";
+      pop.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 4 - pw)) + "px";
+      trg.setAttribute("aria-expanded", "true");
+      closePop = close;
+      window.addEventListener("mousedown", onOutside, true);
+      window.addEventListener("resize", close);
+      window.addEventListener("scroll", close, true);
+    }
+    function pick(v) {
+      close();
+      if (v === value && !o.menu) return;
+      value = v; paint(); api.onChange();
+    }
+    function step(d) {
+      const i = items.findIndex(function (it) { return it[0] === value; });
+      const n = items[(i + d + items.length) % items.length][0];
+      if (n !== value) { value = n; paint(); api.onChange(); }
+    }
+    trg.addEventListener("mousedown", function (e) {
+      if (e.button !== 0 || disabled()) return;
+      e.preventDefault(); trg.focus(); open();
+    });
+    trg.addEventListener("keydown", function (e) {
+      if (disabled()) return;
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      // a menu has no value to cycle, so the arrows just open it
+      else if (e.key === "ArrowDown") { e.preventDefault(); o.menu ? open() : step(1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); o.menu ? open() : step(-1); }
+    });
+    paint();
+    return api;
+  }
+
+  /* ---- window ------------------------------------------------------- */
+  function build() {
+    win = el("div", "hk-win", document.body);
+    win.setAttribute("role", "dialog");
+    win.setAttribute("aria-label", "Settings");
+    const title = el("div", "hk-title", win);
+    el("span", "t", title, "┃ CONFIG // synapse.cfg");
+    el("span", "hk-dot", title);
+    const x = el("span", "hk-x", title, "✕");
+    x.title = "Close (H)";
+    x.addEventListener("click", close);
+    makeDraggable(title, x);
+
+    const tools = el("div", "hk-tools", win);
+    TOOLBAR.forEach(function (t) {
+      const b = mkButton(tools, t.label, t.title);
+      if (t.menu) {
+        const m = makeSelect(b, t.menu.map(function (it) { return [it[0], it[1]]; }), { menu: true });
+        m.onChange = function () {
+          const it = t.menu.find(function (i) { return i[0] === m.value; });
+          if (it) it[2]();
+        };
+      } else {
+        onActivate(b, t.run);
+      }
+    });
+
+    const body = el("div", "hk-body", win);
+    SETTINGS_SCHEMA.forEach(function (sec) {
+      const box = el("div", "hk-sec" + (sec.closed ? " closed" : ""), body);
+      const h = el("div", "hk-sh", box, sec.title);
+      h.tabIndex = 0;
+      h.setAttribute("role", "button");
+      onActivate(h, function () { box.classList.toggle("closed"); });
+      const rows = el("div", "hk-rows", box);
+      sec.rows.forEach(function (row) {
+        const b = ROW_KINDS[row.kind](rows, row, sec);
+        if (row.tip) b.rowEl.title = row.tip;
+        bindings.push(b);
+      });
+    });
+
+    const foot = el("div", "hk-foot", win);
+    statusEl = el("span", "hk-status", foot, "> ready");
+    fpsEl = el("span", null, foot, "-- fps");
+    const keys = el("span", null, foot, "H · F6");
+    keys.title = "H show/hide settings · F6 next background";
+
+    // a dragged window could end up off a shrunken screen; bring it back
+    // to the middle instead
+    window.addEventListener("resize", function () {
+      dragged = false;
+      if (isOpen) center();
+    });
+  }
+
+  /* Opens centred. Once dragged it stays where it was put — across closing
+     and reopening too — until the screen size changes. */
+  let dragged = false;
+  function center() {
+    win.style.maxHeight = "";
+    const w = win.offsetWidth, h = win.offsetHeight;
+    win.style.left = Math.max(0, Math.round((window.innerWidth - w) / 2)) + "px";
+    win.style.top = Math.max(0, Math.round((window.innerHeight - h) / 2)) + "px";
+  }
+
+  /* The title bar drags the window, like every other window. Its position
+     is per session — it is not a setting. */
+  function makeDraggable(handle, skip) {
+    handle.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0 || e.target === skip) return;
+      e.preventDefault();
+      const r = win.getBoundingClientRect();
+      const ox = e.clientX - r.left, oy = e.clientY - r.top;
+      handle.setPointerCapture(e.pointerId);
+      function move(ev) {
+        const x = clamp(ev.clientX - ox, 0, Math.max(0, window.innerWidth - r.width));
+        const y = clamp(ev.clientY - oy, 0, Math.max(0, window.innerHeight - 40));
+        win.style.left = x + "px";
+        win.style.top = y + "px";
+        dragged = true;
+        win.style.maxHeight = Math.max(120, window.innerHeight - y - 8) + "px";
+      }
+      function up() {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+      }
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    });
+  }
+
+  function startMeter() {
+    let acc = 0, drawn = 0;
+    fpsEl.textContent = "-- fps";
+    fpsMeter = function (dt, drew) {
+      acc += dt;
+      if (drew) drawn++;
+      if (acc >= 0.5) {
+        fpsEl.textContent = Math.round(drawn / acc) + " fps";
+        acc = 0; drawn = 0;
+      }
+    };
+  }
+
+  function open() {
+    if (!win) build();
+    win.style.display = "";
+    isOpen = true;
+    cfgBtn.classList.add("on");
+    refresh();
+    if (!dragged) center();
+    startMeter();
+  }
+  function close() {
+    if (closePop) closePop();
+    CodeBox.close();
+    if (!isOpen) return;
+    win.style.display = "none";
+    isOpen = false;
+    cfgBtn.classList.remove("on");
+    fpsMeter = null;
+  }
+  function toggle() { if (isOpen) close(); else open(); }
+  /** Escape peels one layer: a dropdown, then the code box, then the window. */
+  function escape() {
+    if (closePop) closePop();
+    else if (CodeBox.isOpen()) CodeBox.close();
+    else close();
+  }
+  function status(msg) { if (statusEl) statusEl.textContent = "> " + msg; }
+  function syncButton() { cfgBtn.classList.toggle("hover", S.ui.button === "hover"); }
+
+  onActivate(cfgBtn, toggle);
+
+  /* ---- import / export ---------------------------------------------- */
+
+  // Clipboard fallback for when the async API is unavailable or rejects
+  // (in Wallpaper Engine it rejects whenever the wallpaper isn't focused).
+  // execCommand is deprecated, but a native dialog is not an option here.
+  function legacyCopy(text) {
+    const ta = el("textarea", null, document.body);
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:-9999px;opacity:0";
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) {}
+    ta.remove();
+    return ok;
+  }
+  function copyText(text, report, okMsg, failMsg) {
+    const done = function (ok) { report(ok ? okMsg : failMsg); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); },
+                                               function () { done(legacyCopy(text)); });
+    } else {
+      done(legacyCopy(text));
+    }
+  }
+  function currentCode() { return encodeConfig(diffState(S, DEFAULTS) || {}); }
+
+  async function copyLink() {
+    const code = await persistNow();
+    const url = location.href.split(/[?#]/)[0] + (code ? "?config=" + code : "");
+    copyText(url, status, "wallpaper link copied", "copy failed — the link is in the address bar");
+  }
+  function downloadJson() {
+    const blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
+    const a = el("a", null, document.body);
+    a.href = URL.createObjectURL(blob);
+    a.download = "hacker-settings.json";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    status("settings saved as JSON");
+  }
+  let fileInput = null;
+  function pickJson() {
+    if (!fileInput) {
+      fileInput = el("input", null, document.body);
+      fileInput.type = "file";
+      fileInput.accept = ".json,application/json";
+      fileInput.style.display = "none";
+      fileInput.addEventListener("change", function () {
+        const f = fileInput.files[0];
+        fileInput.value = "";
+        if (!f) return;
+        f.text().then(function (t) { loadState(JSON.parse(t)); status("settings imported"); },
+                      function () { status("could not read that file"); })
+         .catch(function () { status("that is not a settings JSON file"); });
+      });
+    }
+    fileInput.click();
+  }
+
+  /* One overlay serves both directions: export fills it and tries the
+     clipboard, import takes a paste. The textarea is not a convenience —
+     it is the fallback that has to exist, because the async clipboard
+     rejects whenever the wallpaper isn't focused, which in a host like
+     Wallpaper Engine is most of the time. */
+  const CodeBox = (function () {
+    let modal = null, titleEl, hint, text, msg, go, mode = "export";
+    function build() {
+      modal = el("div", "hk-modal", document.body);
+      const w = el("div", "hk-win", modal);
+      w.setAttribute("role", "dialog");
+      w.setAttribute("aria-modal", "true");
+      const t = el("div", "hk-title", w);
+      t.style.cursor = "default";
+      titleEl = el("span", "t", t);
+      el("span", "hk-dot", t);
+      el("span", "hk-x", t, "✕").addEventListener("click", close);
+      const card = el("div", "hk-card", w);
+      hint = el("p", null, card);
+      text = el("textarea", null, card);
+      text.spellcheck = false;
+      text.setAttribute("aria-label", "Scene code");
+      const foot = el("div", "hk-cardfoot", card);
+      msg = el("span", "hk-status", foot);
+      go = mkButton(foot, "");
+      onActivate(go, function () { if (mode === "export") copy(); else apply(); });
+      onActivate(mkButton(foot, "CLOSE"), close);
+      modal.addEventListener("mousedown", function (e) { if (e.target === modal) close(); });
+      text.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { e.preventDefault(); close(); }
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && mode === "import") {
+          e.preventDefault(); apply();
+        }
+      });
+    }
+    async function open(m) {
+      if (closePop) closePop();
+      if (!modal) build();
+      mode = m;
+      const exp = m === "export";
+      titleEl.textContent = "┃ " + (exp ? "EXPORT" : "IMPORT") + " // scene code";
+      hint.textContent = exp
+        ? "Paste this into another copy under IMPORT ▸ Scene code. It carries every " +
+          "setting and needs no network — it is how to set up a copy installed from disk, " +
+          "which has no link to read settings from."
+        : "Paste a scene code below, then APPLY. Ctrl+Enter also applies.";
+      go.textContent = exp ? "COPY" : "APPLY";
+      msg.textContent = "";
+      text.value = exp ? await currentCode() : "";
+      modal.classList.add("show");
+      text.focus();
+      if (exp) copy();
+    }
+    function close() { if (modal) modal.classList.remove("show"); }
+    function isOpen() { return !!modal && modal.classList.contains("show"); }
+    function copy() {
+      text.select();
+      copyText(text.value, function (m) { msg.textContent = m; },
+               "> copied to clipboard", "> press Ctrl+C to copy the selected code");
+    }
+    async function apply() {
+      const code = text.value.trim();
+      if (!code) { msg.textContent = "> paste a scene code first"; return; }
+      let obj;
+      try { obj = await decodeConfig(code); }
+      catch (_) { msg.textContent = "> that does not look like a scene code"; return; }
+      loadState(obj);
+      close();
+      status("scene code applied");
+    }
+    return { open: open, close: close, isOpen: isOpen };
+  })();
+
+  return {
+    open: open, close: close, toggle: toggle, escape: escape,
+    isOpen: function () { return isOpen; },
+    refresh: refresh, syncButton: syncButton, status: status
+  };
+})();
+
+/* ---------------------------------------------------------------------
    Bootstrap
    ------------------------------------------------------------------ */
 
 let dashboard = null;
 function onResize() { if (dashboard) dashboard.resized(); }
 
+// Precedence: a link's ?config= (decoded asynchronously, below), then this
+// machine's saved settings, then the defaults. A shared link must never be
+// quietly overridden by local edits; with no link — exactly the case when a
+// wallpaper host opens index.html from disk — local state is all there is.
+if (!BOOT_CODE) mergeInto(S, readLocalState());
+sanitizeState(S);
+
 window.addEventListener("resize", resize);
-// F6 re-rolls the wallpaper, matching the MAUI build's keybind.
 window.addEventListener("keydown", function (e) {
-  if (e.key === "F6") { e.preventDefault(); dashboard.reroll(); }
+  // F6 re-rolls the wallpaper, matching the MAUI build's keybind.
+  if (e.key === "F6") { e.preventDefault(); dashboard.reroll(); requestDraw(); return; }
+  // never while typing — an "h" in the scene-code box is just a letter
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+  if (e.key === "h" || e.key === "H") Settings.toggle();
+  else if (e.key === "Escape") Settings.escape();
 });
 
 resize();
@@ -2704,19 +3738,33 @@ dashboard.resized();
 /* --- frame loop ------------------------------------------------------ */
 
 // Everything is delta-time based, so the redraw rate is a pure cost knob:
-// on a 144/200 Hz display an uncapped rAF loop would redraw 2-3x as often
-// for output that is identical, which as a wallpaper is wasted GPU. 60 is
-// the design rate (the MAUI build ran a 60 FPS timer); a host that limits
-// the whole desktop lower than that takes over, see wallpaperPropertyListener
-// below. The 0.9 factor keeps a display running exactly at the cap from
-// occasionally missing its slot and halving.
-const FPS_MAX = 60;
+// on a 144/200 Hz display an uncapped rAF loop would redraw 2-3x as often,
+// which as a wallpaper is mostly wasted GPU. 60 (the default cap) is the
+// design rate — the MAUI build ran a 60 FPS timer. The 0.9 factor keeps a
+// display running exactly at the cap from occasionally missing its slot
+// and halving.
 let hostFps = -1;                    // -1 until a host reports its limit
-let targetDt = 1 / FPS_MAX;
+let targetDt = 1 / 60;
 function applyFpsCap() {
-  const cap = hostFps >= 0 ? Math.min(hostFps, FPS_MAX) : FPS_MAX;
-  targetDt = 1 / Math.max(1, cap);
+  const cap = S.perf.fpsCap;
+  targetDt = cap > 0 ? 1 / cap : 0;
 }
+/** A host may cap the frame rate of everything on the desktop, and that
+ *  limit owns the FPS cap unless the override switch is on — it is copied
+ *  into the setting, so slider and loop can never disagree. Returns true
+ *  when that copy actually moved the value, so the caller can persist it:
+ *  both the switch and the resulting cap are remembered. */
+function applyHostFps() {
+  let changed = false;
+  if (hostFps >= 0 && !S.perf.fpsOverride && S.perf.fpsCap !== hostFps) {
+    S.perf.fpsCap = hostFps;
+    changed = true;
+  }
+  applyFpsCap();
+  return changed;
+}
+
+applyAll();
 
 let last = performance.now();
 let rafId = 0, wePaused = false;
@@ -2728,7 +3776,14 @@ function tick(now) {
   last = now;
   // Clamp huge gaps (tab suspended, machine asleep) so nothing leaps.
   if (dt > 0.25) dt = 0.25;
-  dashboard.update(dt);
+  const speed = S.anim.speed;
+  // At speed 0 nothing moves, so the last frame stays valid until something
+  // else — a resize, a setting — changes the picture.
+  const frozen = speed <= 0 && !frameDirty;
+  if (fpsMeter) fpsMeter(dt, !frozen);
+  if (frozen) return;
+  frameDirty = false;
+  dashboard.update(dt * speed);
   dashboard.draw();
 }
 
@@ -2745,12 +3800,11 @@ function syncRunning() {
   }
 }
 document.addEventListener("visibilitychange", syncRunning);
-syncRunning();
 
 /* Wallpaper Engine pushes its general settings — among them the frame
    limit it applies to the whole desktop — through this listener, and tells
-   the wallpaper when it is paused. In a browser neither ever fires and the
-   wallpaper behaves exactly as it always has.
+   the wallpaper when it is paused. In a browser neither ever fires: the
+   override switch stays hidden and the FPS cap is always the user's own.
    https://docs.wallpaperengine.io/en/web/performance/fps.html */
 window.wallpaperPropertyListener = {
   setPaused: function (p) { wePaused = !!p; syncRunning(); },
@@ -2760,16 +3814,28 @@ window.wallpaperPropertyListener = {
     const raw = props.fps;
     const v = Number(raw && typeof raw === "object" ? raw.value : raw);
     if (!Number.isFinite(v) || v < 0) return;
-    hostFps = Math.round(v);
-    applyFpsCap();
+    // clamped to the slider's own top, so control and value never disagree
+    hostFps = Math.min(Math.round(v), FPS_CAP_MAX);
+    if (applyHostFps()) persistLater();
+    Settings.refresh();
   }
 };
+
+// A link's settings land before the first frame, so a linked look never
+// flashes the defaults first. Loading one does not save it: the address bar
+// already holds it, and this machine's own state is left alone until the
+// user actually changes something.
+(BOOT_CODE
+  ? decodeConfig(BOOT_CODE).then(function (obj) { loadState(obj, false); },
+      function () { console.warn("hacker: unreadable ?config= in the address bar, ignored"); })
+  : Promise.resolve()
+).then(syncRunning);
 
 /* Debug/test hook. The Claude Browser pane reports document.hidden=true,
    so rAF never fires there; automated checks drive the wallpaper through
    this instead and sample the canvas. step() is synchronous and bypasses
-   the frame cap and the running state entirely, so a stepped frame is
-   never silently swallowed. Harmless in production. */
+   the frame cap, the running state and master speed entirely, so a stepped
+   frame is never silently swallowed. Harmless in production. */
 window.__hacker = {
   dashboard: function () { return dashboard; },
   panels: function () { return dashboard.panels; },
@@ -2780,7 +3846,12 @@ window.__hacker = {
   reroll: function () { dashboard.reroll(); },
   setBackground: function (key) { dashboard.bg = new BackgroundLayer(key); },
   setHostFps: function (v) { window.wallpaperPropertyListener.applyGeneralProperties({ fps: v }); },
-  fpsCap: function () { return 1 / targetDt; }
+  fpsCap: function () { return targetDt > 0 ? 1 / targetDt : 0; },
+  settings: function () { return S; },
+  /** Sets one value the way the panel would: applier, redraw, save. */
+  set: function (path, v) { const o = cloneState(S); setPath(o, path, v); loadState(o); },
+  loadState: function (obj) { loadState(obj); },
+  ui: Settings
 };
 </script>
 </body>

@@ -25,6 +25,68 @@ title in [project.json](project.json) is **SYNAPSE//9**, and the page's own
 **Status: work in progress, not released** — not in the gallery yet, and no
 save-compatibility obligations (see the table in the root `CLAUDE.md`).
 
+## Settings
+
+**⚙ CFG**, in the title bar of the top-right panel (left of its status dot),
+opens the settings window; **H** toggles it, **Esc** closes it. It opens in
+the middle of the screen and its title bar drags it; a dragged window stays
+where it was put until the screen size changes. It is styled as one more
+window of the console.
+
+Every slider's value readout is also a text field: click it (or focus it and
+press Enter), type, and press Enter or click away; Esc cancels. Typed values
+are in the units shown — `137` on a percentage means 137% — accept a decimal
+comma, are clamped to the slider's range, and are not snapped to its step, so
+they can be finer than the slider. The slider then sits at its nearest step
+while the setting keeps the exact value.
+
+| Section | Settings |
+| --- | --- |
+| CRT // OVERLAY | Scanlines and their drift speed, refresh band and its speed, flicker, glitch-bar frequency, vignette. Strengths are relative to the original look (100%); 0 switches an effect off and skips its draw. |
+| ANIMATION | Master speed — scales everything that moves. 0 freezes the screen, and a frozen screen is not redrawn at all. |
+| PERFORMANCE | FPS cap (0 = uncapped), pixel-ratio cap, and **Override WE FPS limit** (see Performance). |
+| INTERFACE | Settings button: dim, or hidden until the mouse is over its spot. |
+
+The toolbar has **IMPORT ▾** (scene code, JSON file), **EXPORT ▾** (wallpaper
+link, scene code, JSON file) and **RESET**.
+
+### Saving and sharing
+
+Every change is saved straight away, two ways: to `localStorage`
+(`tehgm.hacker.state`), so a copy a wallpaper host loads from disk comes back
+to it, and to the address bar as `?config=…`, so the URL is always a link to
+exactly this look. Both hold only the values that differ from the defaults.
+On load a link wins, then the local save, then the defaults; a link that
+cannot be read is ignored with a console warning.
+
+A **scene code** is the same compressed state as bare text, in the same
+format Black Hole and Neonscape use. It is how settings move into a copy
+installed from the Workshop or a ZIP, which has no link to read: export it
+here, paste it under IMPORT ▸ Scene code there.
+
+### Adding a setting
+
+Settings are declared, not hand-built. Adding one is:
+
+1. a key in `DEFAULTS`;
+2. a row in `SETTINGS_SCHEMA` — `{ kind, label, path, ... }`, where `kind` is
+   `range`, `check`, `select`, `note` or `button`, plus optional `tip`,
+   `show(s)` / `dis(s)` predicates and an `apply` override. A `range` also
+   takes a `unit` (`U_PCT`, `U_MUL`, …), which sets both how its readout
+   reads and how a typed value is understood;
+3. if the wallpaper must rebuild something for it, an entry in `APPLY`.
+
+A new section is one more entry in `SETTINGS_SCHEMA`; a new kind of control
+is one more builder in `ROW_KINDS`; a new toolbar action is one more entry in
+`TOOLBAR`. The ranges declared in the schema are also what loaded values are
+clamped to, so a hand-edited save can never push a value out of range.
+
+None of the window exists until it is first opened; closed, the only cost is
+the CFG element and its click handler. Measured: frame time is unchanged
+within noise (0.24–0.26 ms/frame at 1080p either way), and with everything
+at its default the picture is pixel-identical to the build before settings
+existed.
+
 ## What is on screen
 
 Eight panels in a fixed three-column grid whose split fractions are jittered
@@ -105,14 +167,21 @@ background costs one `drawImage` per frame.
 
 ## Performance
 
-Canvas 2D, one `requestAnimationFrame` loop, capped at **60 fps** (everything
-is delta-time based, so a faster display only burns GPU for identical
-frames). Device pixel ratio is capped at 2. The loop stops entirely while the
-page is hidden or while Wallpaper Engine reports the wallpaper paused.
+Canvas 2D, one `requestAnimationFrame` loop, capped at **60 fps** by default
+(everything is delta-time based, so a faster display mostly burns GPU for
+near-identical frames). Device pixel ratio is capped at 2 by default. Both
+caps are settings. The loop stops entirely while the page is hidden or while
+Wallpaper Engine reports the wallpaper paused, and draws nothing while master
+speed is 0.
 
-Inside Wallpaper Engine, the app's own FPS limit takes over the cap when it
-is lower than 60 (pushed through `wallpaperPropertyListener`); in a browser
-nothing ever reports a limit and the cap is simply 60.
+Inside a host that limits the frame rate of the whole desktop — Wallpaper
+Engine does, through `wallpaperPropertyListener` — that limit takes over the
+FPS cap and locks its slider, so the host's setting is respected by default.
+**Override WE FPS limit**, right above the slider, hands the cap back for this
+wallpaper alone; the switch and the cap are both remembered. In a browser no
+limit is ever reported, so the switch stays hidden. This is the same
+behaviour as Black Hole and Neonscape — note it means a host limit above 60
+now raises the cap rather than being clamped to 60.
 
 **Measured**, minimum of ten 300-frame batches on a real GPU:
 
@@ -183,10 +252,6 @@ caches are one screen of that; the largest single consumer is the background
 layer's baked composite, which is around two screens and is the obvious next
 thing to look at.
 
-There is no settings panel yet — customisation is planned. Knobs currently
-live as constants in the source: `FPS_MAX`, the fonts and rates in each
-panel class, `BG_ENTRIES`, `COMPANY_DATA`.
-
 ## Numbers and locale
 
 Two number formats are on screen, deliberately different:
@@ -212,14 +277,24 @@ the console; `window.__hacker` is the stable surface:
 
 ```js
 __hacker.step(dt)           // advance dt seconds (default 1/60) and draw, synchronously;
-                            // bypasses the fps cap and the running state
+                            // bypasses the fps cap, the running state and master speed
 __hacker.stop() / .start()  // pause / resume the live rAF loop
 __hacker.reroll()           // next background with a glitch burst (same as F6)
 __hacker.setBackground(key) // a specific background; keys in __hacker.backgrounds
 __hacker.setHostFps(v)      // pretend Wallpaper Engine reported an FPS limit
-__hacker.fpsCap()           // the cap currently in force
+__hacker.fpsCap()           // the cap currently in force (0 = uncapped)
+__hacker.settings()         // the live settings object
+__hacker.set(path, v)       // set one setting, e.g. set("fx.scan", 2), as the panel would
+__hacker.loadState(obj)     // replace all settings: defaults with obj merged over them
+__hacker.ui                 // the settings window: open() / close() / toggle() / refresh()
 __hacker.dashboard() / .panels()
 ```
+
+For a deterministic frame — A/B diffs between two builds — seed
+`Math.random`, freeze `Date`, and stub `requestAnimationFrame` before the page
+loads (CDP `Page.addScriptToEvaluateOnNewDocument`). Without the rAF stub the
+live loop runs in real time while assets load and consumes random numbers at
+a timing-dependent rate, so even a build compared with itself differs.
 
 The Claude Browser pane reports `document.hidden = true`, so rAF never fires
 there — drive it with `step()` and sample the canvas.
