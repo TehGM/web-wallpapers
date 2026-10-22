@@ -277,8 +277,12 @@ Canvas 2D, one `requestAnimationFrame` loop, capped at **60 fps** by default
 (everything is delta-time based, so a faster display mostly burns GPU for
 near-identical frames). Device pixel ratio is capped at 2 by default. Both
 caps are settings. The loop stops entirely while the page is hidden or while
-Wallpaper Engine reports the wallpaper paused, and draws nothing while master
-speed is 0.
+Wallpaper Engine reports the wallpaper paused. At master speed 0 it draws
+nothing, and stops waking up for frames at all until something needs drawing —
+a setting, a resize, a background loading or changing on its timer (which is
+woken for, and counts the time slept). With the settings window open it keeps
+running, for the fps meter. A very low FPS cap still runs in real time: one
+frame's time step is allowed to reach one and a half capped frames.
 
 Inside a host that limits the frame rate of the whole desktop — Wallpaper
 Engine does, through `wallpaperPropertyListener` — that limit takes over the

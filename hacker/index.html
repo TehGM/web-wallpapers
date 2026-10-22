@@ -34,6 +34,7 @@
     position:fixed; top:var(--hk-it); right:calc(var(--hk-ir) + 16px * var(--hk-k)); z-index:10;
     height:var(--hk-tb); padding:0 calc(8px * var(--hk-k));
     font:700 calc(12px * var(--hk-k))/var(--hk-tb) var(--hk-mono); color:var(--hk-gr); cursor:pointer;
+    white-space:nowrap;
     user-select:none; opacity:.7; transition:opacity .2s, color .2s;
   }
   .hk-cfg:hover, .hk-cfg:focus-visible, .hk-cfg.on{ opacity:1; color:var(--hk-g); outline:none; }
@@ -382,7 +383,13 @@ function colorHex(c) {
 const _colorCache = new Map();
 function colorOf(hex) {
   let c = _colorCache.get(hex);
-  if (!c) { c = mkColor(hex); _colorCache.set(hex, c); }
+  if (!c) {
+    // dragging in the picker passes through a colour per pointer move; a
+    // panel holds its own reference, so dropping the cache loses nothing
+    if (_colorCache.size >= 64) _colorCache.clear();
+    c = mkColor(hex);
+    _colorCache.set(hex, c);
+  }
   return c;
 }
 function fade(c, a) {
@@ -431,6 +438,8 @@ const _cwCache = new Map();
 function charW(size) {
   let w = _cwCache.get(size);
   if (w === undefined) {
+    // text-size sliders pass through a size per input; only a few are live
+    if (_cwCache.size >= 256) _cwCache.clear();
     measureCtx.font = fontMono(size);
     w = measureCtx.measureText("0000000000").width / 10;
     _cwCache.set(size, w);
@@ -445,6 +454,7 @@ const _blockCache = new Map();
 function blockMetrics(size) {
   let m = _blockCache.get(size);
   if (m === undefined) {
+    if (_blockCache.size >= 256) _blockCache.clear();
     measureCtx.font = fontMono(size);
     const t = measureCtx.measureText("█");
     m = { asc: t.actualBoundingBoxAscent, desc: t.actualBoundingBoxDescent };
@@ -660,7 +670,8 @@ const COMPANIES = (function () {
     const initials = words.length === 1
       ? name.slice(0, Math.min(2, name.length)).toUpperCase()
       : words.slice(0, 3).map(function (w) { return w[0].toUpperCase(); }).join("");
-    out.push({ name: name, key: key, accent: mkColor("#" + p[1]), initials: initials });
+    out.push({ name: name, key: key, accent: mkColor("#" + p[1]), initials: initials,
+               upper: name.toUpperCase(), gray: null });
   }
   return out;
 })();
@@ -682,7 +693,7 @@ const Logos = (function () {
       if (hit !== undefined) return hit;
       cache.set(company.key, null);
       const img = new Image();
-      img.onload = function () { cache.set(company.key, img); };
+      img.onload = function () { cache.set(company.key, img); requestDraw(); };
       img.decoding = "async";
       img.src = "assets/logos/" + company.key + LOGO_EXT;
       return null;
@@ -889,7 +900,13 @@ let VW = 0, VH = 0, DPR = 1;
    resize, a setting. Only consulted while master speed is 0: the scene is
    then frozen, and the loop redraws only when told to. */
 let frameDirty = true;
-function requestDraw() { frameDirty = true; }
+// Asleep: frozen at speed 0 with nothing to redraw, the loop stops asking
+// for frames until something does need drawing (see sleep() / wake()).
+let sleeping = false;
+function requestDraw() {
+  frameDirty = true;
+  if (sleeping) wake();
+}
 
 /** The device pixel ratio actually rendered at. Capped because as a
  *  wallpaper this may run full-screen on a 4K panel, where rendering at 2x
@@ -902,6 +919,10 @@ function resize() {
   VH = Math.max(240, window.innerHeight);
   canvas.width = Math.round(VW * DPR);
   canvas.height = Math.round(VH * DPR);
+  // the drawing's own size, so a window under 320x240 shows it unsqueezed
+  // and in register with the gears and editor drawn over it
+  canvas.style.width = VW + "px";
+  canvas.style.height = VH + "px";
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.textBaseline = "middle";
   _cwCache.clear();
@@ -1105,13 +1126,19 @@ class Panel {
     this._px = this.x; this._py = this.y; this._pw = this.w; this._ph = this.h; this._ptb = this.tb;
     this._framePath = roundRectPath(this.x, this.y, this.w, this.h, 4);
     this._titlePath = roundRectPath(this.x, this.y, this.w, this.tb, 4);
+    const k = this.tbk;
+    this._dotPath = new Path2D();
+    this._dotPath.arc(this.x + this.w - 10 * k, this.y + this.tb / 2, 2.5 * k, 0, Math.PI * 2);
   }
+  /** The rect inside the frame and title bar. One object per panel,
+   *  refilled on each call: it is asked for every frame, and nothing keeps
+   *  it past the draw it was asked for. */
   contentRect() {
     const top = this.showTitle ? this.tb + PAD / 2 : PAD;
-    return {
-      x: this.x + PAD, y: this.y + top,
-      w: this.w - PAD * 2, h: this.h - top - PAD
-    };
+    const r = this._cr || (this._cr = { x: 0, y: 0, w: 0, h: 0 });
+    r.x = this.x + PAD; r.y = this.y + top;
+    r.w = this.w - PAD * 2; r.h = this.h - top - PAD;
+    return r;
   }
   /** Painted into the layer: the frame, the title bar, and the part of the
    *  content that is stable between invalidations. */
@@ -1172,10 +1199,7 @@ class Panel {
     if (this.showTitle) {
       const dotA = this.pulseRate() > 0 ? 0.4 + 0.6 * Math.abs(Math.sin(this._pulse * 2)) : 0.85;
       ctx.fillStyle = fade(this.accent, dotA);
-      ctx.beginPath();
-      const k = this.tbk;
-      ctx.arc(b.x + b.w - 10 * k, b.y + this.tb / 2, 2.5 * k, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fill(this._dotPath);
     }
   }
   /** Content that changes only when the panel says so. */
@@ -1211,7 +1235,7 @@ class BackgroundLayer {
     if (key === "none") return;
     const img = new Image();
     const self = this;
-    img.onload = function () { self.image = img; self._dirty = true; };
+    img.onload = function () { self.image = img; self._dirty = true; requestDraw(); };
     img.decoding = "async";
     img.src = "assets/backgrounds/" + (this.s.file || (key + BG_EXT));
   }
@@ -1223,10 +1247,15 @@ class BackgroundLayer {
   // That is 9 full-screen textured draws at 60fps, which a wallpaper cannot
   // afford — so the identical composite is baked once into an offscreen
   // canvas and blitted with a single drawImage per frame instead.
+  /** Frees the baked canvases now rather than whenever they are collected —
+   *  together they are a couple of screens' worth. */
+  release() {
+    if (this._baked) { this._baked.width = 0; this._baked.height = 0; this._baked = null; }
+    if (this._overlay) { this._overlay.width = 0; this._overlay.height = 0; this._overlay = null; }
+  }
   _bake() {
     this._dirty = false;
-    this._baked = null;
-    this._overlay = null;
+    this.release();
     if (!this.image || !VW || !VH) return;
 
     const iw = this.image.naturalWidth, ih = this.image.naturalHeight;
@@ -1320,11 +1349,11 @@ const BG_KEYS = Object.keys(BG_ENTRIES);
 /** Continuously scrolling fake terminal with a normal/paused/burst state
  *  machine so multiple terminals never scroll in lockstep. */
 class TerminalPanel extends Panel {
-  constructor(title, accent, generator, baseRate, fontSize) {
+  constructor(title, accent, baseRate, fontSize) {
     super();
     this.title = title;
     this.accent = accent;
-    this.gen = generator;
+    this.gen = RD.systemLogLine;     // configure() sets the panel's own feed
     this.fontSize = fontSize || 11;
     this.baseRate = (baseRate || 4) * (0.7 + rnd() * 0.8);
     this.lines = [];
@@ -1359,6 +1388,12 @@ class TerminalPanel extends Panel {
     const a = c.alerts;
     this.gen = c.feed === "events" ? function () { return RD.eventFeedLine(a); }
                                    : function () { return RD.systemLogLine(a); };
+    // the constructor's backlog was written before the settings arrived
+    if (!this._configured && (c.feed !== "system" || c.alerts !== 1)) {
+      this.lines = [];
+      for (let i = 0; i < 20; i++) this.emit();
+    }
+    this._configured = true;
   }
   drawStatic(r) {
     const fs = this.fontSize * this.ts;
@@ -1421,7 +1456,18 @@ class HexPanel extends Panel {
     this.acc += this.rate * dt;
     while (this.acc >= 1) { this.acc -= 1; this.emit(); }
   }
-  configure(c) { super.configure(c); this.hlK = c.highlights; }
+  configure(c) {
+    super.configure(c);
+    this.hlK = c.highlights;
+    // the constructor's rows were highlighted at the default rate
+    if (!this._configured && c.highlights !== 1) {
+      this.offset -= this.rows.length * 8;
+      const n = this.rows.length;
+      this.rows = [];
+      for (let i = 0; i < n; i++) this.emit();
+    }
+    this._configured = true;
+  }
   drawStatic(r) {
     const fs = 10 * this.ts;
     ctx.font = fontMono(fs);
@@ -1512,11 +1558,11 @@ const GRAPH_CATALOG = [
 const HISTORY_LEN = 110, SAMPLE_INTERVAL = 0.10;
 
 class GraphPanel extends Panel {
-  constructor(count, horizontal, counters) {
+  constructor(count, counters) {
     super();
     this.title = "TELEMETRY";
     this.accent = T.Blue;
-    this.horizontal = !!horizontal;
+    this.horizontal = true;          // configure() sets it from the panel's shape
     this.orient = "auto";
     this.initData(count, counters || 0);
   }
@@ -1547,6 +1593,8 @@ class GraphPanel extends Panel {
     if (c.charts !== this._nSeries || c.counters !== this._nCounters) this.initData(c.charts, c.counters);
     this.orient = c.orient;
     this.syncOrientation();
+    this._fLab = fontMono(8.5 * this.ts);
+    this._fVal = fontMonoBold(14 * this.ts);
   }
   /** Side by side in a wide slot, stacked in a tall one — unless set. */
   syncOrientation() {
@@ -1592,7 +1640,9 @@ class GraphPanel extends Panel {
   drawLive(r) {
     if (this.counters.length > 0) {
       const cw = Math.min(130 * this.ts, r.w * 0.26);
-      this.drawCounters({ x: r.x + r.w - cw, y: r.y, w: cw, h: r.h });
+      const cr = this._ccr || (this._ccr = { x: 0, y: 0, w: 0, h: 0 });
+      cr.x = r.x + r.w - cw; cr.y = r.y; cr.w = cw; cr.h = r.h;
+      this.drawCounters(cr);
     }
   }
   drawStatic(r) {
@@ -1617,15 +1667,20 @@ class GraphPanel extends Panel {
       const c = this.counters[i];
       const y = r.y + i * cellH;
       const ts = this.ts;
-      ctx.font = fontMono(8.5 * ts);
+      ctx.font = this._fLab;
       ctx.fillStyle = T.Gray.css;
       textL(c.label, r.x, y + 1, 10 * ts);
-      const arrow = c.trend > 0 ? "▲" : c.trend < 0 ? "▼" : " ";
-      ctx.fillStyle = (c.trend >= 0 ? T.Green : T.Orange).css;
-      textR(arrow, r.x, r.w - 2, y + 1, 10 * ts);
-      ctx.font = fontMonoBold(14 * ts);
+      // no arrow while flat: a space draws nothing
+      if (c.trend !== 0) {
+        ctx.fillStyle = (c.trend > 0 ? T.Green : T.Orange).css;
+        textR(c.trend > 0 ? "▲" : "▼", r.x, r.w - 2, y + 1, 10 * ts);
+      }
+      ctx.font = this._fVal;
       ctx.fillStyle = T.White.css;
-      textL(uiInt(Math.trunc(c.value)), r.x, y + 11 * ts, cellH - 12 * ts);
+      // formatted only when the shown number changes, not every frame
+      const iv = Math.trunc(c.value);
+      if (iv !== c._iv) { c._iv = iv; c._s = uiInt(iv); }
+      textL(c._s, r.x, y + 11 * ts, cellH - 12 * ts);
     }
   }
   drawSeries(s, r) {
@@ -1659,35 +1714,29 @@ class GraphPanel extends Panel {
     }
     ctx.stroke();
 
-    // Polyline, oldest → newest, with a translucent fill beneath it.
+    // Polyline, oldest → newest, with a translucent fill beneath it. Built
+    // once and used for the fill and both strokes.
     const stepX = cw / (HISTORY_LEN - 1);
-    ctx.beginPath();
+    const line = new Path2D();
     for (let i = 0; i < HISTORY_LEN; i++) {
       const v = s.history[(s.head + i) % HISTORY_LEN];
       const x = cx + i * stepX, y = cy + ch - v * ch;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      if (i === 0) line.moveTo(x, y); else line.lineTo(x, y);
     }
-    ctx.save();
-    ctx.lineTo(cx + cw, cy + ch);
-    ctx.lineTo(cx, cy + ch);
-    ctx.closePath();
+    const area = new Path2D(line);
+    area.lineTo(cx + cw, cy + ch);
+    area.lineTo(cx, cy + ch);
+    area.closePath();
     ctx.fillStyle = fade(s.color, 0.10);
-    ctx.fill();
-    ctx.restore();
+    ctx.fill(area);
 
     // Glow pass then crisp pass.
-    ctx.beginPath();
-    for (let i = 0; i < HISTORY_LEN; i++) {
-      const v = s.history[(s.head + i) % HISTORY_LEN];
-      const x = cx + i * stepX, y = cy + ch - v * ch;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
     ctx.lineWidth = 3;
     ctx.strokeStyle = fade(s.color, 0.22);
-    ctx.stroke();
+    ctx.stroke(line);
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = s.color.css;
-    ctx.stroke();
+    ctx.stroke(line);
   }
 }
 
@@ -1720,6 +1769,10 @@ class ProgressPanel extends Panel {
   configure(c) {
     super.configure(c);
     this.failK = c.failures; this.endlessK = c.endless;
+    this._fBar = fontMono(10.5 * 0.85 * this.ts);
+    // the constructor's bars were dealt at the default odds
+    if (!this._configured && (c.failures !== 1 || c.endless !== 1)) this.bars = [];
+    this._configured = true;
     while (this.bars.length < c.bars) this.bars.push(this.newBar());
     this.bars.length = c.bars;
   }
@@ -1783,8 +1836,12 @@ class ProgressPanel extends Panel {
     const slots = Math.max(1, (r.h / rowH) | 0);
     rowH = r.h / slots;
     const n = Math.min(slots, this.bars.length);
+    // every bar uses the one font, and nothing in drawBar sets another
+    ctx.font = this._fBar;
+    const br = this._br || (this._br = { x: 0, y: 0, w: 0, h: 0 });
     for (let i = 0; i < n; i++) {
-      this.drawBar(this.bars[i], { x: r.x, y: r.y + i * rowH, w: r.w, h: rowH - 4 });
+      br.x = r.x; br.y = r.y + i * rowH; br.w = r.w; br.h = rowH - 4;
+      this.drawBar(this.bars[i], br);
     }
   }
   drawBar(bar, r) {
@@ -1793,14 +1850,16 @@ class ProgressPanel extends Panel {
                 : bar.state === BAR_RESTARTING ? T.Orange : T.Green;
 
     const ts = this.ts, labH = 12 * ts;
-    ctx.font = fontMono(10.5 * 0.85 * ts);
     ctx.fillStyle = T.Gray.css;
     textL(bar.label, r.x, r.y, labH);
     ctx.fillStyle = color.css;
-    const right = bar.state === BAR_RUNNING
-      ? bar.status + " " + Math.round(bar.progress * 100) + "%"
-      : bar.status;
-    textR(right, r.x, r.w, r.y, labH);
+    // rebuilt only when what it says changes
+    const pct = bar.state === BAR_RUNNING ? Math.round(bar.progress * 100) : -1;
+    if (pct !== bar._rp || bar.status !== bar._rs) {
+      bar._rp = pct; bar._rs = bar.status;
+      bar._rt = pct >= 0 ? bar.status + " " + pct + "%" : bar.status;
+    }
+    textR(bar._rt, r.x, r.w, r.y, labH);
 
     // Block-character bar, movie style: ██████░░░░░
     //
@@ -1836,7 +1895,12 @@ const PH_INTRO = 0, PH_WORKING = 1, PH_BREACHED = 2, PH_FADEOUT = 3;
 const INTRO_DUR = 1.2, BREACH_DUR = 3.2, FADEOUT_DUR = 0.5;
 
 class CompanyPanel extends Panel {
-  configure(c) { super.configure(c); this.showLogos = c.logos; }
+  configure(c) {
+    super.configure(c);
+    this.showLogos = c.logos;
+    this._stepFont = fontMono(11 * this.ts);
+    this._pctFont = fontMono(9 * this.ts);
+  }
   constructor() {
     super();
     this.title = "TARGET ACQUISITION";
@@ -1856,6 +1920,9 @@ class CompanyPanel extends Panel {
   get current() { return this.deck[this.index]; }
   prepare() {
     this.steps = takeShuffled(RD.CompanySteps, 5 + rndInt(4));
+    // the lines as drawn, built once per company rather than per frame
+    this._doneTxt = this.steps.map(function (t) { return "✔ " + t; });
+    this._curTxt = this.steps.map(function (t) { return "▸ " + t; });
     this.stepIndex = 0;
     this.stepProgress = 0;
     this.stepSpeed = 0.6 + rnd() * 1.6;
@@ -1908,8 +1975,10 @@ class CompanyPanel extends Panel {
     const logoSize = Math.min(r.h * 0.42, r.w * 0.35);
     const logoX = r.x + r.w / 2 - logoSize / 2;
     const logoY = r.y + 8 + (1 - alpha) * 14;   // slides up during intro
-    const logo = { x: logoX, y: logoY, w: logoSize, h: logoSize };
-    const brand = breached ? grayscale(company.accent) : company.accent;
+    const logo = this._logo || (this._logo = { x: 0, y: 0, w: 0, h: 0 });
+    logo.x = logoX; logo.y = logoY; logo.w = logoSize; logo.h = logoSize;
+    // the greyed brand colour is made once per company, not every frame
+    const brand = breached ? (company.gray || (company.gray = grayscale(company.accent))) : company.accent;
 
     const image = this.showLogos ? Logos.get(company) : null;
     if (image) {
@@ -1933,9 +2002,11 @@ class CompanyPanel extends Panel {
     }
 
     const ts = this.ts;
-    ctx.font = fontMonoBold(Math.min(22 * ts, r.w / (company.name.length * 0.75)));
+    const nameSize = Math.min(22 * ts, r.w / (company.name.length * 0.75));
+    if (nameSize !== this._nameSize) { this._nameSize = nameSize; this._nameFont = fontMonoBold(nameSize); }
+    ctx.font = this._nameFont;
     ctx.fillStyle = fade(breached ? T.Gray : T.White, alpha);
-    textC(company.name.toUpperCase(), r.x, r.w, logo.y + logo.h + 4, 26 * ts);
+    textC(company.upper, r.x, r.w, logo.y + logo.h + 4, 26 * ts);
 
     const bodyY = logo.y + logo.h + 8 + 26 * ts;
     if (this.phase === PH_WORKING || this.phase === PH_INTRO) this.drawSteps(r, bodyY, alpha);
@@ -1944,16 +2015,16 @@ class CompanyPanel extends Panel {
   drawSteps(r, y, alpha) {
     const lineH = 17 * this.ts;
     const bottom = r.y + r.h;
-    ctx.font = fontMono(11 * this.ts);
+    ctx.font = this._stepFont;
     const firstShown = Math.max(0, this.stepIndex - (((bottom - y) / lineH) | 0) + 2);
     for (let i = firstShown; i < this.stepIndex && y < bottom - lineH; i++, y += lineH) {
       ctx.fillStyle = fade(T.DimGreen, alpha);
-      textL("✔ " + this.steps[i], r.x + 10, y, lineH);
+      textL(this._doneTxt[i], r.x + 10, y, lineH);
     }
     if (this.phase !== PH_WORKING || this.stepIndex >= this.steps.length) return;
 
     ctx.fillStyle = fade(T.Cyan, alpha);
-    textL("▸ " + this.steps[this.stepIndex], r.x + 10, y, lineH);
+    textL(this._curTxt[this.stepIndex], r.x + 10, y, lineH);
     y += lineH;
 
     if (y < bottom - 12) {
@@ -1963,9 +2034,9 @@ class CompanyPanel extends Panel {
       ctx.strokeRect(bx + 0.5, by + 0.5, barW - 1, 7 - 1);
       ctx.fillStyle = fade(T.Cyan, 0.85 * alpha);
       ctx.fillRect(bx + 1, by + 1, (barW - 2) * this.stepProgress, 5);
-      ctx.font = fontMono(9 * this.ts);
+      ctx.font = this._pctFont;
       ctx.fillStyle = fade(T.Cyan, 0.8 * alpha);
-      textR(Math.round(this.stepProgress * 100) + "%", r.x, r.w - 20, y + 12, 12);
+      textR(PCT_TEXT[clamp(Math.round(this.stepProgress * 100), 0, 100)], r.x, r.w - 20, y + 12, 12);
     }
   }
   drawBreach(r, logo, y, alpha) {
@@ -1991,11 +2062,15 @@ class CompanyPanel extends Panel {
     ctx.strokeStyle = fade(T.Red, blink * alpha);
     roundRect(bx, y, bw, bh, 4); ctx.stroke();
 
-    ctx.font = fontMonoBold(Math.min(19 * this.ts, bw / 14));
+    const bSize = Math.min(19 * this.ts, bw / 14);
+    if (bSize !== this._breachSize) { this._breachSize = bSize; this._breachFont = fontMonoBold(bSize); }
+    ctx.font = this._breachFont;
     ctx.fillStyle = fade(T.Red, blink * alpha);
     textC("BREACHED SUCCESSFULLY", bx, bw, y, bh);
   }
 }
+/** "0%" … "100%", so a percentage drawn every frame is not built every frame. */
+const PCT_TEXT = (function () { const a = []; for (let i = 0; i <= 100; i++) a.push(i + "%"); return a; })();
 function grayscale(c) {
   const l = Math.round(0.299 * c.r + 0.587 * c.g + 0.114 * c.b);
   const hex = "#" + ((1 << 24) + (l << 16) + (l << 8) + l).toString(16).slice(1);
@@ -2077,7 +2152,7 @@ class CodePanel extends Panel {
    *  fillText calls — and it only moves when a line is completed, roughly
    *  twice a second. Redrawing all of it for every typed character was by
    *  a wide margin the most expensive thing this wallpaper did. */
-  configure(c) { super.configure(c); this.longPauses = c.pauses; }
+  configure(c) { super.configure(c); this.longPauses = c.pauses; this._font = fontMono(12.5 * this.ts); }
   drawStatic(r) {
     const fs = 12.5 * this.ts;
     ctx.font = fontMono(fs);
@@ -2093,7 +2168,7 @@ class CodePanel extends Panel {
    *  and its cursor are drawn live over the cached backlog. */
   drawLive(r) {
     const fs = 12.5 * this.ts;
-    ctx.font = fontMono(fs);
+    ctx.font = this._font;
     const lh = lineHeight(fs), cw = charW(fs);
     const y = r.y + r.h - lh;
     const cursorX = this.drawLine(this.current, r, y, cw, lh, this.typed);
@@ -2105,13 +2180,19 @@ class CodePanel extends Panel {
   drawLine(line, r, y, cw, lh, maxChars) {
     let x = r.x, remaining = maxChars;
     const s = line.s, c = line.c;
+    // Indents and blank-line placeholders are all spaces and draw nothing,
+    // so they only advance the pen. Worked out once per line — a line never
+    // changes after it is generated.
+    const blank = line.blank || (line.blank = s.map(function (t) { return /^ *$/.test(t); }));
     for (let i = 0; i < s.length; i++) {
       if (remaining <= 0 || x > r.x + r.w) break;
-      const text = s[i].length <= remaining ? s[i] : s[i].slice(0, remaining);
-      ctx.fillStyle = c[i].css;
-      textL(text, x, y, lh);
-      x += text.length * cw;
-      remaining -= text.length;
+      const n = s[i].length <= remaining ? s[i].length : remaining;
+      if (!blank[i]) {
+        ctx.fillStyle = c[i].css;
+        textL(n === s[i].length ? s[i] : s[i].slice(0, n), x, y, lh);
+      }
+      x += n * cw;
+      remaining -= n;
     }
     return x;
   }
@@ -2399,6 +2480,7 @@ class ShellPanel extends Panel {
     this.host = c.host || this._host;
     this.prompt = this.user + "@" + this.host + (this.user === "root" ? ":~# " : ":~$ ");
     super.configure(c);
+    this._font = fontMono(11 * this.ts);
     // a new command set takes effect from the next command; the one being
     // typed or run is held in this.cmd and finishes as it started
     let keys = SHELL_COMMANDS.filter(function (k) { return c.cmd[k[0]]; }).map(function (k) { return k[0]; });
@@ -2410,6 +2492,22 @@ class ShellPanel extends Panel {
       this.deckIndex = -1;
       this._cmdKeys = sig;
     }
+    // The constructor's opening scrollback was played as root@synapse-NN
+    // with every command; replay it as this terminal is set up, the same
+    // way — two commands, the next one then skipped to as before.
+    if (!this._configured && (c.user || c.host || keys)) {
+      this.lines = [];
+      this.deckIndex = 0;
+      for (let i = 0; i < 2; i++) {
+        if (this.deckIndex >= this.deck.length) { this.deck = shuffled(this.deck); this.deckIndex = 0; }
+        const cmd = this.deck[this.deckIndex];
+        this.push(this.prompt + cmd.build(), 0, this.prompt.length);
+        const evs = cmd.run();
+        for (let j = 0; j < evs.length; j++) this.apply(evs[j]);
+        this.deckIndex++;
+      }
+    }
+    this._configured = true;
   }
   push(text, color, promptLen) {
     this.lines.push({ t: text, c: color, p: promptLen });
@@ -2509,11 +2607,19 @@ class ShellPanel extends Panel {
    *  command runs). It gains characters and blinks, so it stays live. */
   drawLive(r) {
     const fs = 11 * this.ts;
-    ctx.font = fontMono(fs);
+    ctx.font = this._font;
     const lh = lineHeight(fs), cw = charW(fs);
     const y = r.y + r.h - lh;
     if (this.state === SH_TYPING || this.state === SH_PAUSE) {
-      const typed = this.state === SH_TYPING ? this.typing.slice(0, this.typedChars) : "";
+      let typed = "";
+      if (this.state === SH_TYPING) {
+        // sliced again only when another character has been typed
+        if (this._typedSrc !== this.typing || this._typedN !== this.typedChars) {
+          this._typedSrc = this.typing; this._typedN = this.typedChars;
+          this._typed = this.typing.slice(0, this.typedChars);
+        }
+        typed = this._typed;
+      }
       ctx.fillStyle = T.Green.css;
       textL(this.prompt, r.x, y, lh);
       let x = r.x + this.prompt.length * cw;
@@ -3118,7 +3224,7 @@ function buildShellDeck(keys) {
    stops reading as anything. Keys are part of saved layouts. */
 const PANEL_TYPES = {
   trace:     { name: "SYS://TRACE", desc: "scrolling event log", min: [150, 70],
-               make: function () { return new TerminalPanel("SYS://TRACE", T.Green, RD.systemLogLine, 5, 11); } },
+               make: function () { return new TerminalPanel("SYS://TRACE", T.Green, 5, 11); } },
   hex:       { name: "MEMORY INSPECTOR", desc: "hex dump", min: [150, 60],
                make: function () { return new HexPanel(); } },
   code:      { name: "SOURCE SYNTH", desc: "code being typed live", min: [200, 90],
@@ -3128,13 +3234,27 @@ const PANEL_TYPES = {
   tty:       { name: "TTY", desc: "terminal running commands", min: [200, 90],
                make: function () { return new ShellPanel(); } },
   telemetry: { name: "TELEMETRY", desc: "charts and counters", min: [200, 80],
-               make: function () { return new GraphPanel(2, true, 3); } },
+               make: function () { return new GraphPanel(2, 3); } },
   pipeline:  { name: "TASK PIPELINE", desc: "progress bars", min: [150, 56],
                make: function () { return new ProgressPanel(); } },
   stream:    { name: "RAW STREAM", desc: "binary stream", min: [110, 56],
                make: function () { return new BinaryPanel(); } }
 };
 const PANEL_TYPE_KEYS = Object.keys(PANEL_TYPES);
+/** Puts the CFG button on the top-right panel's title bar: the layout
+ *  area's corner, clamped like the panels are, so however large the insets
+ *  the button stays on screen — the only way back into the settings in a
+ *  host that forwards no keyboard. */
+function placeCfg() {
+  const a = layoutArea(VW, VH), root = document.documentElement.style;
+  const right = VW - a.x - a.w;
+  root.setProperty("--hk-it", a.y + "px");
+  root.setProperty("--hk-ir", right + "px");
+  // a sliver of layout at the far left leaves no room for the button left
+  // of its corner; then it sits against the screen's left edge instead
+  const b = document.getElementById("hk-cfg").getBoundingClientRect();
+  if (b.left < 0) root.setProperty("--hk-ir", Math.max(0, right + b.left) + "px");
+}
 /** The gap between panels, in CSS px (a setting). */
 function layoutGap() { return S.space.gap; }
 /** The rect panels are laid out in: the screen less its insets, in CSS
@@ -3193,8 +3313,17 @@ function tidyTree(n) {
   if (c.length === 1) return c[0];
   let sum = 0;
   for (let i = 0; i < f.length; i++) sum += f[i];
+  if (!(sum > 0 && sum < Infinity)) {
+    // fractions so large they overflow: scale by the largest first, or
+    // share equally when even that fails
+    const m = Math.max.apply(null, f);
+    for (let i = 0; i < f.length; i++) f[i] = m > 0 && m < Infinity ? f[i] / m : 1;
+    sum = 0;
+    for (let i = 0; i < f.length; i++) sum += f[i];
+  }
   n.c = c;
-  n.f = f.map(function (x) { return Number((x / sum).toFixed(5)); });
+  // never rounded down to nothing, which a later edit would divide by
+  n.f = f.map(function (x) { return Math.max(1e-5, Number((x / sum).toFixed(5))); });
   return n;
 }
 
@@ -3209,7 +3338,9 @@ function validateTree(n) {
     if (!n || typeof n !== "object" || depth > 24 || leaves >= 64) return null;
     if (typeof n.p === "string") {
       if (!PANEL_TYPES[n.p]) return null;
-      let id = Number.isInteger(n.id) && n.id > 0 ? n.id : 0;
+      // a sane panel number, or a fresh one: past 2^53 "next id" stops
+      // counting, and two leaves would share an id
+      let id = Number.isSafeInteger(n.id) && n.id > 0 && n.id < 1e6 ? n.id : 0;
       if (!id || seen.has(id)) id = 0;
       if (id) seen.add(id);
       leaves++;
@@ -3473,6 +3604,7 @@ class Dashboard {
     return true;
   }
   setBackground(key) {
+    if (this.bg) this.bg.release();
     this.bg = new BackgroundLayer(key);
     this.bgClock = 0;
     this.glitchLeft = 0.18;
@@ -3536,13 +3668,14 @@ class Dashboard {
   drawOverlays() {
     // Slowly drifting scanlines — subtle so text stays readable.
     const fx = S.fx;
+    // Set outright rather than through save/translate/restore: the screen's
+    // own transform is always the plain DPR scale.
     if (this.scanPattern) {
       const phase = this.scanPhase;
-      ctx.save();
-      ctx.translate(0, phase);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, DPR * phase);
       ctx.fillStyle = this.scanPattern;
       ctx.fillRect(0, -phase, VW, VH + 4);
-      ctx.restore();
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     }
 
     // A brighter "refresh band" sweeping down the screen.
@@ -3568,10 +3701,14 @@ class Dashboard {
 
     // Soft radial vignette for the CRT feel.
     if (this.vignette) {
+      // kept as translate + scale: setting the same matrix directly builds
+      // it differently enough to move the gradient's faint edge by a step
       ctx.save();
       ctx.translate(VW / 2, VH / 2);
       ctx.scale(VW, VH);
       ctx.fillStyle = this.vignette;
+      // The full square, although only the corners are not transparent:
+      // filling just those moves an odd corner pixel by a step.
       ctx.fillRect(-0.5, -0.5, 1, 1);
       ctx.restore();
     }
@@ -3660,7 +3797,10 @@ function unitParse(u, text) {
   const t = String(text).trim().toLowerCase().replace(",", ".");
   if (u.zero && t === u.zero) return 0;
   if (u.parse) return u.parse(t);
-  const num = t.replace(/\s*[%x×]$/, "");
+  // the unit's own suffix ("px") may be typed along with the number
+  const suf = u.suffix.trim().toLowerCase();
+  let num = suf && t.endsWith(suf) ? t.slice(0, -suf.length).trim() : t;
+  num = num.replace(/\s*[%x×]$/, "");
   if (!num || !/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/.test(num)) return NaN;
   const v = Number(num) / u.scale;
   return u.int ? Math.round(v) : Number(v.toFixed(6));
@@ -3969,9 +4109,7 @@ const APPLY = {
     Settings.refresh();
   },
   space: function () {
-    const root = document.documentElement.style;
-    root.setProperty("--hk-it", S.space.top + "px");
-    root.setProperty("--hk-ir", S.space.right + "px");
+    placeCfg();
     APPLY.layout();
   },
   // drift is read every frame, so there is nothing to rebuild
@@ -3986,6 +4124,7 @@ const APPLY = {
   layout: function () {
     if (!dashboard) return;
     dashboard.applyLayout();
+    PanelSettings.sync();
     LayoutEditor.refresh();
     PanelGears.refresh();
   }
@@ -4734,6 +4873,8 @@ const Settings = (function () {
 
   function startMeter() {
     let acc = 0, drawn = 0;
+    // the meter needs the loop running, even frozen
+    if (sleeping) wake();
     fpsEl.textContent = "-- fps";
     fpsMeter = function (dt, drew) {
       acc += dt;
@@ -4947,6 +5088,9 @@ function dragWindowBy(win, handle, skip) {
     if (e.button !== 0 || e.target === skip) return;
     e.preventDefault();
     const r = win.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top;
+    // captured, so the drag follows the pointer anywhere and a cancelled
+    // pointer (a touch taken over by the system) ends it cleanly
+    handle.setPointerCapture(e.pointerId);
     function move(ev) {
       const y = clamp(ev.clientY - oy, 0, Math.max(0, window.innerHeight - 40));
       win.style.left = clamp(ev.clientX - ox, 0, Math.max(0, window.innerWidth - r.width)) + "px";
@@ -4954,11 +5098,13 @@ function dragWindowBy(win, handle, skip) {
       win.style.maxHeight = Math.max(120, window.innerHeight - y - 8) + "px";
     }
     function up() {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
     }
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   });
 }
 
@@ -4966,7 +5112,7 @@ function dragWindowBy(win, handle, skip) {
    layout editor (click a panel, or its ⚙) or from the ⚙ buttons shown on
    every panel while the settings window is open. */
 const PanelSettings = (function () {
-  let win = null, form = null, titleEl = null, statusEl = null, pid = 0;
+  let win = null, form = null, titleEl = null, statusEl = null, pid = 0, ptype = "";
 
   function panelName(id) {
     const p = dashboard.panels.instances.get(id);
@@ -5019,6 +5165,7 @@ const PanelSettings = (function () {
     pid = id;
     const leaf = currentLeaf();
     if (!leaf) { pid = 0; return; }
+    ptype = leaf.p;
     win = domEl("div", "hk-win hk-pset", document.body);
     win.setAttribute("role", "dialog");
     win.setAttribute("aria-label", "Panel settings");
@@ -5072,7 +5219,10 @@ const PanelSettings = (function () {
    *  or closes it when its panel is gone. */
   function sync() {
     if (!win) return;
-    if (!currentLeaf()) { close(true); return; }
+    // gone, or the same number now belongs to another kind of panel (after
+    // a reset or an import): its rows would be the wrong ones
+    const leaf = currentLeaf();
+    if (!leaf || leaf.p !== ptype) { close(true); return; }
     titleEl.textContent = "┃ PANEL // " + panelName(pid);
     form.refresh();
   }
@@ -5583,7 +5733,7 @@ const LayoutEditor = (function () {
       else exit();
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (!drag) doUndo(); }
-    else if (e.key === "l" || e.key === "L") exit();
+    else if ((e.key === "l" || e.key === "L") && !e.ctrlKey && !e.altKey && !e.metaKey) exit();
   }
 
   return {
@@ -5600,9 +5750,11 @@ let dashboard = null;
 function onResize() {
   if (!dashboard) return;
   dashboard.resized();
+  placeCfg();
   LayoutEditor.refresh();
   PanelGears.refresh();
   Settings.refresh();
+  fitWindows();
 }
 
 // Precedence: a link's ?config= (decoded asynchronously, below), then this
@@ -5618,8 +5770,10 @@ window.addEventListener("keydown", function (e) {
   // never while typing — an "h" in the scene-code box is just a letter
   const t = e.target;
   if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
-  if (e.key === "h" || e.key === "H") Settings.toggle();
-  else if (e.key === "l" || e.key === "L") LayoutEditor.enter();
+  // Ctrl+L, Ctrl+H and the like belong to the browser
+  const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
+  if (plain && (e.key === "h" || e.key === "H")) Settings.toggle();
+  else if (plain && (e.key === "l" || e.key === "L")) LayoutEditor.enter();
   else if (e.key === "Escape") Settings.escape();
 });
 
@@ -5660,36 +5814,69 @@ applyAll();
 
 let last = performance.now();
 let rafId = 0, wePaused = false;
+let sleptAt = 0, wakeTimer = 0;
 
 function tick(now) {
   rafId = requestAnimationFrame(tick);
   let dt = (now - last) / 1000;
   if (dt < targetDt * 0.9) return;
   last = now;
-  // Clamp huge gaps (tab suspended, machine asleep) so nothing leaps.
-  if (dt > 0.25) dt = 0.25;
+  // Clamp huge gaps (tab suspended, machine asleep) so nothing leaps — but
+  // never below one and a half capped frames, or an FPS cap of 3 or less
+  // would slow everything down rather than just drawing it less often.
+  const most = Math.max(0.25, targetDt * 1.5);
+  if (dt > most) dt = most;
   dashboard.tickBackground(dt);
   const speed = S.anim.speed;
   // At speed 0 nothing moves, so the last frame stays valid until something
   // else — a resize, a setting — changes the picture.
   const frozen = speed <= 0 && !frameDirty;
   if (fpsMeter) fpsMeter(dt, !frozen);
-  if (frozen) return;
+  if (frozen) {
+    // nothing will change until something asks for a draw, so stop waking
+    // up for frames — except while the settings window's fps meter runs
+    if (!fpsMeter) sleep(now);
+    return;
+  }
   frameDirty = false;
   dashboard.update(dt * speed);
   dashboard.draw();
+}
+
+/* Frozen, the loop would otherwise run at the display's rate just to find
+   nothing to do. Asleep it asks for no frames; requestDraw() wakes it. The
+   background timer counts real time even frozen, so a timer is set for its
+   next change, and on waking the time slept is counted in. */
+function sleep(now) {
+  cancelAnimationFrame(rafId);
+  rafId = 0;
+  sleeping = true;
+  sleptAt = now;
+  if (S.bg.cycle > 0)
+    wakeTimer = setTimeout(wake, Math.max(0, (S.bg.cycle - dashboard.bgClock) * 1000));
+}
+function wake() {
+  if (!sleeping) return;
+  sleeping = false;
+  clearTimeout(wakeTimer);
+  wakeTimer = 0;
+  const now = performance.now();
+  last = now;
+  if (!rafId && !document.hidden && !wePaused) rafId = requestAnimationFrame(tick);
+  dashboard.tickBackground((now - sleptAt) / 1000);
 }
 
 // Stop animating while hidden or paused by the host — as a wallpaper this
 // may sit behind fullscreen windows for hours.
 function syncRunning() {
   const should = !document.hidden && !wePaused;
-  if (should && !rafId) {
+  if (should && !rafId && !sleeping) {
     last = performance.now();
     rafId = requestAnimationFrame(tick);
-  } else if (!should && rafId) {
-    cancelAnimationFrame(rafId);
-    rafId = 0;
+  } else if (!should) {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+    // hidden time does not count, asleep or not
+    if (sleeping) { sleeping = false; clearTimeout(wakeTimer); wakeTimer = 0; }
   }
 }
 document.addEventListener("visibilitychange", syncRunning);
