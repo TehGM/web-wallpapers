@@ -667,7 +667,10 @@ const DEFAULTS = {
   // multiple of each image's own tuned opacity
   bg: {
     on: BG_CHOICES.reduce(function (o, k) { o[k] = k !== "none"; return o; }, {}),
-    cycle: 0, opacity: 1
+    cycle: 0, opacity: 1,
+    // multiples of each image's own tuned blur radius and drift distance,
+    // and of the drift's speed
+    blur: 1, drift: 1, driftSpeed: 1
   },
   // null: the default layout (re-jittered every load). Once edited, the exact
   // tree as { root } — root null for an empty screen. See defaultLayout().
@@ -1161,7 +1164,7 @@ class BackgroundLayer {
     img.src = "assets/backgrounds/" + (this.s.file || (key + BG_EXT));
   }
 
-  update(dt) { this._time += dt; }
+  update(dt) { this._time += dt * S.bg.driftSpeed; }
   invalidate() { this._dirty = true; }
 
   // The MAUI build composites 9 image copies every frame to fake a blur.
@@ -1185,7 +1188,8 @@ class BackgroundLayer {
     this._w = iw * scale;
     this._h = ih * scale;
 
-    const pad = s.soften > 0.5 ? Math.ceil(s.soften) + 2 : 0;
+    const soften = s.soften * S.bg.blur;
+    const pad = soften > 0.5 ? Math.ceil(soften) + 2 : 0;
     const op = Math.min(1, s.opacity * S.bg.opacity);
     this._bakedPad = pad;
 
@@ -1194,11 +1198,11 @@ class BackgroundLayer {
     bc.height = Math.max(1, Math.ceil(this._h + pad * 2));
     const bx = bc.getContext("2d");
 
-    if (s.soften > 0.5) {
-      const taps = s.soften > 2.5 ? RING_TAPS : AXIAL_TAPS;
+    if (soften > 0.5) {
+      const taps = soften > 2.5 ? RING_TAPS : AXIAL_TAPS;
       bx.globalAlpha = op * (taps.length === 8 ? 0.20 : 0.35);
       for (let i = 0; i < taps.length; i++) {
-        bx.drawImage(this.image, pad + taps[i][0] * s.soften, pad + taps[i][1] * s.soften, this._w, this._h);
+        bx.drawImage(this.image, pad + taps[i][0] * soften, pad + taps[i][1] * soften, this._w, this._h);
       }
     }
     bx.globalAlpha = op;
@@ -1234,17 +1238,18 @@ class BackgroundLayer {
     if (!this._baked) return;
 
     const s = this.s, w = this._w, h = this._h;
+    const drift = s.drift * S.bg.drift;
     let x, y;
     if (w >= VW && h >= VH) {
       // Cover: pan within the overflow, never far enough to expose an edge.
       const slackX = w - VW, slackY = h - VH;
-      x = -slackX * s.focalX + Math.sin(this._time * 0.061) * Math.min(s.drift, slackX * 0.5);
-      y = -slackY * s.focalY + Math.cos(this._time * 0.043) * Math.min(s.drift, slackY * 0.5);
+      x = -slackX * s.focalX + Math.sin(this._time * 0.061) * Math.min(drift, slackX * 0.5);
+      y = -slackY * s.focalY + Math.cos(this._time * 0.043) * Math.min(drift, slackY * 0.5);
     } else {
       // Contained: smaller than the screen, so it is placed by focal point
       // and free to drift — the art already sits on black.
-      x = (VW - w) * s.focalX + Math.sin(this._time * 0.061) * s.drift;
-      y = (VH - h) * s.focalY + Math.cos(this._time * 0.043) * s.drift;
+      x = (VW - w) * s.focalX + Math.sin(this._time * 0.061) * drift;
+      y = (VH - h) * s.focalY + Math.cos(this._time * 0.043) * drift;
     }
     x += glitch * 6;
 
@@ -3656,6 +3661,14 @@ const SETTINGS_SCHEMA = [
       tip: "The background on screen now. Picking one that is not ticked below ticks it." },
     { kind: "range", label: "Opacity", path: "bg.opacity", min: 0, max: 2, step: 0.05, unit: U_PCT,
       tip: "How strongly the background image shows through. 100% is each image's own tuned level." },
+    { kind: "range", label: "Blur", path: "bg.blur", min: 0, max: 3, step: 0.05, unit: U_PCT,
+      tip: "How much the background is softened, so it reads as texture behind the text. " +
+           "100% is each image's own tuned level; 0 leaves it sharp." },
+    { kind: "range", label: "Drift", path: "bg.drift", min: 0, max: 5, step: 0.05, unit: U_PCT, apply: "bgDrift",
+      tip: "How far the background slowly wanders. 100% is each image's own tuned distance; 0 holds it still. " +
+           "A full-screen image never moves far enough to show its edge." },
+    { kind: "range", label: "Drift speed", path: "bg.driftSpeed", min: 0, max: 5, step: 0.05, unit: U_MUL, apply: "bgDrift",
+      tip: "How fast the background wanders." },
     { kind: "range", label: "Change every", path: "bg.cycle", min: 0, max: 86400, map: CYCLE_MAP, unit: U_DURATION,
       tip: "Switch to another ticked background on a timer — off, or anything from seconds to " +
            "once a day. Type a value for an exact one: 90, 5m, 1h30m. Counts real time." },
@@ -3904,6 +3917,8 @@ const APPLY = {
     root.setProperty("--hk-ir", S.space.right + "px");
     APPLY.layout();
   },
+  // drift is read every frame, so there is nothing to rebuild
+  bgDrift: function () { requestDraw(); },
   // the glow is baked into each panel's cached frame
   glow: function () { if (dashboard) dashboard.panels.invalidateAll(); },
   uiScale: function () {
