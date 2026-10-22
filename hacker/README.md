@@ -46,6 +46,7 @@ while the setting keeps the exact value.
 | LAYOUT | **Layout & panels** (also **L**) — see Layout and Panel settings below. |
 | APPEARANCE | Text size — every panel's text, multiplying each panel's own text size (60–250%). Title bars scale with it, and so does everything sitting in them: the CFG button, the panel ⚙ buttons, the layout editor's ⚙ and ✕. |
 | | Settings windows — size of every settings window (this one, each panel's, the layout editor's, the scene-code box), 75–200%. Affects nothing else; applies when the slider is released. |
+| BACKGROUND | **Current** — the background on screen now, chosen from the list (picking one that is not ticked ticks it); **Opacity**, as a multiple of each image's own tuned level; **Change every** — off, or 5 s to once a day (typed: `90`, `5m`, `1h30m`), counted in real time; and which backgrounds to pick from, **No background** among them. |
 | CRT // OVERLAY | Scanlines and their drift speed, refresh band and its speed, flicker, glitch-bar frequency, vignette. Strengths are relative to the original look (100%); 0 switches an effect off and skips its draw. |
 | ANIMATION | Master speed — scales everything that moves. 0 freezes the screen, and a frozen screen is not redrawn at all. |
 | PERFORMANCE | FPS cap (0 = uncapped), pixel-ratio cap, and **Override WE FPS limit** (see Performance). |
@@ -243,10 +244,18 @@ deck is shuffled and replayed endlessly.
 
 `BG_ENTRIES` lists the background images with per-image readability tuning
 (opacity, scrim, tint, focal point, zoom, soften radius, drift, cover vs
-contain). One is picked at random on load. **F6** swaps to a different one
-with a glitch burst. Adding an image means dropping it into
-`assets/backgrounds/` and adding an entry — the defaults in `BG_DEFAULT` are
-a reasonable start and each entry only states what differs.
+contain). Adding an image means dropping it into `assets/backgrounds/` and
+adding an entry — the defaults in `BG_DEFAULT` are a reasonable start and
+each entry only states what differs — plus a label in `BG_LABELS`.
+
+`BG_CHOICES` is every image plus `none`, which is picked, ticked and cycled
+like an image and simply draws nothing. The settings tick which ones may be
+picked (every image by default, not `none`): one of them is chosen at random
+on load and by the optional timer, each change with a glitch burst. The one
+on screen is always a ticked one — unticking it switches to another, and
+unticking the last ticks `none` and shows it. The timer counts real time, so
+it neither stretches with master speed nor stops while the screen is frozen;
+it does stop while the wallpaper is hidden or paused, like everything else.
 
 The MAUI original faked its blur by compositing nine copies of the image
 every frame; here the same composite (plus the scrim, tint and edge falloff)
@@ -367,8 +376,8 @@ the console; `window.__hacker` is the stable surface:
 __hacker.step(dt)           // advance dt seconds (default 1/60) and draw, synchronously;
                             // bypasses the fps cap, the running state and master speed
 __hacker.stop() / .start()  // pause / resume the live rAF loop
-__hacker.reroll()           // next background with a glitch burst (same as F6)
-__hacker.setBackground(key) // a specific background; keys in __hacker.backgrounds
+__hacker.reroll()           // another ticked background, with a glitch burst
+__hacker.setBackground(key) // a specific background: a key of __hacker.backgrounds, or "none"
 __hacker.setHostFps(v)      // pretend Wallpaper Engine reported an FPS limit
 __hacker.fpsCap()           // the cap currently in force (0 = uncapped)
 __hacker.settings()         // the live settings object

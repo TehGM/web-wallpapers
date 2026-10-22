@@ -103,6 +103,7 @@
   .hk-chk input:checked + .hk-box::before{ content:"[x]"; color:var(--hk-g); }
   .hk-chk input:focus-visible + .hk-box{ outline:1px solid var(--hk-g); }
   .hk-note{ margin:6px 0; color:var(--hk-gr); line-height:1.45; }
+  .hk-badge{ margin-left:auto; color:var(--hk-c); font-size:10px; white-space:nowrap; }
   .hk-text{
     display:block; width:100%; box-sizing:border-box; margin:0; padding:2px 6px;
     border:1px solid rgba(60,255,122,.35); border-radius:0; background:rgba(60,255,122,.05);
@@ -305,6 +306,17 @@ const BG_ENTRIES = {
   // 200x199 (!) glitch art: contained + scale-capped instead of cover-fit,
   // or a 10x upscale turns it to mush
   "glitch-skull":        { opacity: 0.30, scrim: 0.08, focalY: 0.46, soften: 1.0, zoom: 1.0, drift: 14.0, fit: "contain", maxScale: 3.0, backdrop: "#000000" }
+};
+/* What the background can be: every image, and "none" — picked, ticked
+   and cycled exactly like an image, it just draws nothing. Keys are part
+   of saved settings. */
+const BG_CHOICES = ["none"].concat(Object.keys(BG_ENTRIES));
+const BG_LABELS = {
+  "none": "No background",
+  "mask-typography": "Mask: typography", "mask-hoodie-dark": "Mask: hoodie, dark",
+  "mask-smoke-wood": "Mask: smoke & wood", "mask-legion-text": "Mask: legion text",
+  "mask-anarchy-blue": "Mask: anarchy, blue", "mask-knowledge-free": "Mask: knowledge is free",
+  "mask-hoodie-3d": "Mask: hoodie, 3D", "glitch-skull": "Glitch skull"
 };
 
 /* ---------------------------------------------------------------------
@@ -644,6 +656,13 @@ const DEFAULTS = {
   // multiplies every panel's own text size
   // ui scales every settings window, and nothing else
   look: { text: 1, ui: 1 },
+  // which backgrounds may be picked (all the images, not "none"), how often
+  // to pick another in seconds (0 = only on load), and opacity as a
+  // multiple of each image's own tuned opacity
+  bg: {
+    on: BG_CHOICES.reduce(function (o, k) { o[k] = k !== "none"; return o; }, {}),
+    cycle: 0, opacity: 1
+  },
   // null: the default layout (re-jittered every load). Once edited, the exact
   // tree as { root } — root null for an empty screen. See defaultLayout().
   layout: null
@@ -1112,6 +1131,9 @@ class BackgroundLayer {
     this._time = 0;
     this._dirty = true;
 
+    // "none" never gets an image, so it never bakes and draw() is a no-op:
+    // the screen is just cleared to the backdrop
+    if (key === "none") return;
     const img = new Image();
     const self = this;
     img.onload = function () { self.image = img; self._dirty = true; };
@@ -1144,6 +1166,7 @@ class BackgroundLayer {
     this._h = ih * scale;
 
     const pad = s.soften > 0.5 ? Math.ceil(s.soften) + 2 : 0;
+    const op = Math.min(1, s.opacity * S.bg.opacity);
     this._bakedPad = pad;
 
     const bc = document.createElement("canvas");
@@ -1153,12 +1176,12 @@ class BackgroundLayer {
 
     if (s.soften > 0.5) {
       const taps = s.soften > 2.5 ? RING_TAPS : AXIAL_TAPS;
-      bx.globalAlpha = s.opacity * (taps.length === 8 ? 0.20 : 0.35);
+      bx.globalAlpha = op * (taps.length === 8 ? 0.20 : 0.35);
       for (let i = 0; i < taps.length; i++) {
         bx.drawImage(this.image, pad + taps[i][0] * s.soften, pad + taps[i][1] * s.soften, this._w, this._h);
       }
     }
-    bx.globalAlpha = s.opacity;
+    bx.globalAlpha = op;
     bx.drawImage(this.image, pad, pad, this._w, this._h);
     bx.globalAlpha = 1;
     this._baked = bc;
@@ -3296,11 +3319,20 @@ class PanelManager {
   }
 }
 
+/** A random enabled background other than `exclude` — or `exclude` itself
+ *  when it is the only one enabled. */
+function pickBackground(exclude) {
+  const on = BG_CHOICES.filter(function (k) { return S.bg.on[k]; });
+  const others = on.filter(function (k) { return k !== exclude; });
+  return others.length ? pick(others) : (on.length ? on[0] : "none");
+}
+
 /** Root: clears, draws the wallpaper + panels, then the CRT overlays. */
 class Dashboard {
   constructor() {
     this.panels = new PanelManager();
-    this.bg = new BackgroundLayer(pick(BG_KEYS));
+    this.bg = new BackgroundLayer(pickBackground(null));
+    this.bgClock = 0;           // seconds since the background last changed
     // Phases rather than one clock, so a speed setting changing mid-run
     // changes the rate from here on instead of jumping the position.
     this.scanPhase = 0; this.bandPhase = 0;
@@ -3350,14 +3382,26 @@ class Dashboard {
    *  glitch burst so the change reads as intentional. Never re-rolls onto
    *  the wallpaper already showing. */
   reroll() {
-    let keys = BG_KEYS;
-    if (keys.length > 1) {
-      const self = this;
-      keys = keys.filter(function (k) { return k !== self.bg.key; });
-    }
-    this.bg = new BackgroundLayer(pick(keys));
+    const next = pickBackground(this.bg.key);
+    if (next === this.bg.key) return false;     // nothing else is enabled
+    this.setBackground(next);
+    return true;
+  }
+  setBackground(key) {
+    this.bg = new BackgroundLayer(key);
+    this.bgClock = 0;
     this.glitchLeft = 0.18;
     this.glitchY = rnd();
+    requestDraw();
+    Settings.refresh();
+  }
+  /** Wall-clock time, not animation time: "every five minutes" should not
+   *  stretch with master speed, or stop while the screen is frozen. */
+  tickBackground(dt) {
+    const every = S.bg.cycle;
+    if (every <= 0) return;
+    this.bgClock += dt;
+    if (this.bgClock >= every) { this.bgClock = 0; this.reroll(); }
   }
   /** Re-reads the layout from S: instances to match, then their rects. */
   applyLayout() {
@@ -3383,7 +3427,7 @@ class Dashboard {
       this.flickerLeft = 0.06 + rnd() * 0.08;
     }
     // Frequency scales how fast the countdown runs, so 0 simply never
-    // fires — F6's own burst still plays.
+    // fires — the burst on a background change still plays.
     this.glitchLeft -= dt;
     this.glitchTimer -= dt * fx.glitch;
     if (this.glitchTimer <= 0) {
@@ -3476,18 +3520,59 @@ const U_SPEED = { scale: 1, dp: 2, suffix: "x", zero: "frozen" };
 const U_FPS = { scale: 1, dp: 0, suffix: "", zero: "uncapped", int: true };
 const U_NUM2 = { scale: 1, dp: 2, suffix: "" };
 
+/* Seconds, shown as "45s", "5m 30s", "2h 15m"; typed the same way, or as
+   plain seconds. Whole seconds only. */
+function fmtDuration(v) {
+  v = Math.round(v);
+  if (v < 60) return v + "s";
+  if (v < 3600) { const m = Math.floor(v / 60), x = v % 60; return m + "m" + (x ? " " + x + "s" : ""); }
+  const h = Math.floor(v / 3600), m = Math.round((v % 3600) / 60);
+  return h + "h" + (m ? " " + m + "m" : "");
+}
+function parseDuration(t) {
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.round(Number(t));
+  // longest unit names first, or "min" would stop at its "m"
+  const re = /(\d+(?:\.\d+)?)\s*(min|sec|d|h|m|s)\s*/g;
+  const mult = { d: 86400, h: 3600, m: 60, min: 60, s: 1, sec: 1 };
+  let total = 0, used = 0, m;
+  while ((m = re.exec(t))) { total += Number(m[1]) * mult[m[2]]; used += m[0].length; }
+  return used === t.length && used > 0 ? Math.round(total) : NaN;
+}
+const U_DURATION = { scale: 1, dp: 0, suffix: "", zero: "off", int: true, show: fmtDuration, parse: parseDuration };
+/* The change-every slider steps through round intervals from 5 s to a
+   day — on a linear 0–86400 scale everything under an hour would be
+   crammed into its first few pixels. Typing still gives any exact value;
+   the slider then rests on the nearest step. */
+const CYCLE_MAP = (function () {
+  const V = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1200, 1800, 2700,
+             3600, 5400, 7200, 10800, 14400, 21600, 28800, 43200, 86400];
+  return {
+    steps: V.length - 1,
+    from: function (t) { return V[clamp(Math.round(t), 0, V.length - 1)]; },
+    to: function (v) {
+      let best = 0;
+      for (let i = 1; i < V.length; i++) if (Math.abs(V[i] - v) < Math.abs(V[best] - v)) best = i;
+      return best;
+    }
+  };
+})();
+
 /** Display number, to `dp` decimals unless a typed value carries more. */
 function unitNumber(u, v) {
   const d = v * u.scale, s = d.toFixed(u.dp);
   return Math.abs(Number(s) - d) < 1e-9 ? s : String(Number(d.toFixed(u.dp + 3)));
 }
-function unitShow(u, v) { return v <= 0 && u.zero ? u.zero : unitNumber(u, v) + u.suffix; }
-function unitEditText(u, v) { return String(Number((v * u.scale).toFixed(6))); }
+function unitShow(u, v) {
+  if (v <= 0 && u.zero) return u.zero;
+  return u.show ? u.show(v) : unitNumber(u, v) + u.suffix;
+}
+function unitEditText(u, v) { return u.show ? (v <= 0 ? "0" : u.show(v).replace(/ /g, "")) : String(Number((v * u.scale).toFixed(6))); }
 /** Typed text -> value, or NaN. Accepts a decimal comma, the unit's own
  *  suffix and its zero word ("off"). */
 function unitParse(u, text) {
   const t = String(text).trim().toLowerCase().replace(",", ".");
   if (u.zero && t === u.zero) return 0;
+  if (u.parse) return u.parse(t);
   const num = t.replace(/\s*[%x×]$/, "");
   if (!num || !/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/.test(num)) return NaN;
   const v = Number(num) / u.scale;
@@ -3509,6 +3594,26 @@ const SETTINGS_SCHEMA = [
       tip: "Size of the settings windows — this one, each panel's, and the layout editor's. " +
            "The wallpaper itself is not affected. Applies when the slider is released." }
   ]},
+  { id: "bg", title: "BACKGROUND", apply: "bg", rows: [
+    // what is on screen right now — runtime state, not a saved setting;
+    // picking one that is not ticked ticks it, so the rule holds
+    { kind: "select", label: "Current",
+      options: BG_CHOICES.map(function (k) { return [k, BG_LABELS[k] || k]; }),
+      get: function () { return dashboard ? dashboard.bg.key : "none"; },
+      set: function (k) {
+        if (!S.bg.on[k]) { S.bg.on[k] = true; persistLater(); }
+        dashboard.setBackground(k);
+      },
+      tip: "The background on screen now. Picking one that is not ticked below ticks it." },
+    { kind: "range", label: "Opacity", path: "bg.opacity", min: 0, max: 2, step: 0.05, unit: U_PCT,
+      tip: "How strongly the background image shows through. 100% is each image's own tuned level." },
+    { kind: "range", label: "Change every", path: "bg.cycle", min: 0, max: 86400, map: CYCLE_MAP, unit: U_DURATION,
+      tip: "Switch to another ticked background on a timer — off, or anything from seconds to " +
+           "once a day. Type a value for an exact one: 90, 5m, 1h30m. Counts real time." },
+  ].concat(BG_CHOICES.map(function (k) {
+    return { kind: "check", label: BG_LABELS[k] || k, path: "bg.on." + k,
+             badge: function () { return dashboard && dashboard.bg.key === k ? "◂ current" : ""; } };
+  }))},
   { id: "fx", title: "CRT // OVERLAY", apply: "fx", rows: [
     { kind: "range", label: "Scanlines", path: "fx.scan", min: 0, max: 3, step: 0.05, unit: U_PCT,
       tip: "Darkness of the CRT scanline pattern. 100% is the original look." },
@@ -3522,7 +3627,7 @@ const SETTINGS_SCHEMA = [
     { kind: "range", label: "Flicker", path: "fx.flicker", min: 0, max: 3, step: 0.05, unit: U_PCT,
       tip: "Brightness of the brief whole-screen flickers, every few seconds." },
     { kind: "range", label: "Glitch bars", path: "fx.glitch", min: 0, max: 4, step: 0.05, unit: U_PCT,
-      tip: "How often cyan/red glitch bars tear across the screen. Off still lets F6 glitch." },
+      tip: "How often cyan/red glitch bars tear across the screen. Off still glitches when the background changes." },
     { kind: "range", label: "Vignette", path: "fx.vignette", min: 0, max: 2.5, step: 0.05, unit: U_PCT,
       tip: "Darkening towards the screen corners." }
   ]},
@@ -3573,11 +3678,18 @@ function sanitizeRows(o, rows, defaults) {
     }
   }
 }
+/** At least one background must stay ticked: with none, "none" is. */
+function enforceBackgrounds(s) {
+  if (BG_CHOICES.some(function (k) { return s.bg.on[k]; })) return false;
+  s.bg.on.none = true;
+  return true;
+}
 function sanitizeState(s) {
   if (s.layout !== null)
     s.layout = s.layout && typeof s.layout === "object" && !Array.isArray(s.layout)
       ? { root: validateTree(s.layout.root) } : null;
   for (let i = 0; i < SETTINGS_SCHEMA.length; i++) sanitizeRows(s, SETTINGS_SCHEMA[i].rows, DEFAULTS);
+  enforceBackgrounds(s);
 }
 
 /* ---------------------------------------------------------------------
@@ -3715,6 +3827,17 @@ const APPLY = {
     document.documentElement.style.setProperty("--hk-k", String(S.look.text));
     APPLY.layout();
   },
+  /* The background on screen must be one that is ticked: unticking it
+     switches to another, and unticking the last one ticks "none" and
+     shows it. Opacity is baked into the layer, so it re-bakes. */
+  bg: function () {
+    const forced = enforceBackgrounds(S);
+    if (!dashboard) return;
+    if (!S.bg.on[dashboard.bg.key]) dashboard.setBackground(pickBackground(null));
+    else dashboard.bg.invalidate();
+    if (forced) Settings.status("no background left ticked — current is now No background");
+    Settings.refresh();
+  },
   uiScale: function () {
     document.documentElement.style.setProperty("--hk-u", String(S.look.ui));
     Settings.fit();
@@ -3800,18 +3923,23 @@ const Form = (function () {
       val.title = "Click to type an exact value";
       const inp = el("input", null, r);
       inp.type = "range";
-      inp.min = row.min; inp.max = row.max; inp.step = row.step;
+      // `map` puts the slider on its own scale (CYCLE_MAP); the value is
+      // still what is stored, typed and shown
+      const map = row.map;
+      if (map) { inp.min = 0; inp.max = map.steps; inp.step = 1; }
+      else { inp.min = row.min; inp.max = row.max; inp.step = row.step; }
+      const fromSlider = function () { return map ? map.from(Number(inp.value)) : parseFloat(inp.value); };
       inp.setAttribute("aria-label", row.label);
       const u = row.unit || U_NUM2;
       // `live: false` commits on release only, for settings that rebuild
       // something expensive (a resize re-bakes the background)
       inp.addEventListener("input", function () {
-        const v = parseFloat(inp.value);
+        const v = fromSlider();
         val.textContent = unitShow(u, v);
         if (row.live !== false) ctx.set(row, sec, v);
       });
       if (row.live === false)
-        inp.addEventListener("change", function () { ctx.set(row, sec, parseFloat(inp.value)); });
+        inp.addEventListener("change", function () { ctx.set(row, sec, fromSlider()); });
 
       /* The readout doubles as a text field for exact values: the slider
          snaps to its step, a typed value does not. The slider then shows
@@ -3836,8 +3964,9 @@ const Form = (function () {
             if (isNaN(v)) ctx.status("not a number: " + box.value.trim());
             else {
               const c = clamp(v, row.min, row.max);
-              if (c !== v) ctx.status(row.label.toLowerCase() + " limited to " +
-                                  unitNumber(u, row.min) + "–" + unitNumber(u, row.max) + u.suffix);
+              if (c !== v) ctx.status(row.label.toLowerCase() + " limited to " + (u.show
+                ? unitShow(u, row.min) + " – " + unitShow(u, row.max)
+                : unitNumber(u, row.min) + "–" + unitNumber(u, row.max) + u.suffix));
               if (c !== ctx.get(row.path)) ctx.set(row, sec, c);
             }
           }
@@ -3858,7 +3987,7 @@ const Form = (function () {
 
       function sync() {
         const v = ctx.get(row.path);
-        inp.value = v;
+        inp.value = map ? map.to(v) : v;
         val.textContent = unitShow(u, v);
       }
       return { row: row, rowEl: r, input: inp, sync: sync };
@@ -3869,9 +3998,12 @@ const Form = (function () {
       inp.type = "checkbox";
       el("span", "hk-box", r);
       el("span", null, r, row.label);
+      // `badge(state)`: a short live note after the label, e.g. "current"
+      const badge = row.badge ? el("span", "hk-badge", r) : null;
       inp.addEventListener("change", function () { ctx.set(row, sec, inp.checked); });
       return { row: row, rowEl: r, input: inp, sync: function () {
         inp.checked = !!ctx.get(row.path);
+        if (badge) badge.textContent = row.badge(ctx.state());
       }};
     },
     select: function (parent, row, sec, ctx) {
@@ -3879,9 +4011,12 @@ const Form = (function () {
       el("div", "hk-lab", r, row.label);
       const sel = makeSelect(el("div", "hk-sel", r), row.options);
       sel.el.setAttribute("aria-label", row.label);
-      sel.onChange = function () { ctx.set(row, sec, sel.value); };
+      // a row with its own get/set edits something outside the state
+      sel.onChange = row.set
+        ? function () { row.set(sel.value); ctx.refresh(); }
+        : function () { ctx.set(row, sec, sel.value); };
       return { row: row, rowEl: r, input: sel.el, sync: function () {
-        sel.value = ctx.get(row.path);
+        sel.value = row.get ? row.get() : ctx.get(row.path);
       }};
     },
     /* Commits on Enter or on leaving the field, not per keystroke — a
@@ -4034,8 +4169,10 @@ const Form = (function () {
       }
     }
     const rowCtx = {
-      get: ctx.get, status: ctx.status,
-      set: function (row, sec, v) { ctx.set(row, sec, v); refreshVis(); }
+      get: ctx.get, status: ctx.status, state: ctx.state, refresh: refreshAll,
+      // a change can move other values (the background rules do), so every
+      // control is pulled back in line, not just the one that changed
+      set: function (row, sec, v) { ctx.set(row, sec, v); refreshAll(); }
     };
     sections.forEach(function (sec) {
       const box = el("div", "hk-sec" + (sec.closed ? " closed" : ""), body);
@@ -4050,10 +4187,11 @@ const Form = (function () {
         bindings.push(b);
       });
     });
-    return { refresh: function () {
+    function refreshAll() {
       for (let i = 0; i < bindings.length; i++) if (bindings[i].sync) bindings[i].sync();
       refreshVis();
-    }};
+    }
+    return { refresh: refreshAll };
   }
 
   return {
@@ -4136,8 +4274,8 @@ const Settings = (function () {
     const foot = el("div", "hk-foot", win);
     statusEl = el("span", "hk-status", foot, "> ready");
     fpsEl = el("span", null, foot, "-- fps");
-    const keys = el("span", null, foot, "H · F6");
-    keys.title = "H show/hide settings · L edit layout · F6 next background";
+    const keys = el("span", null, foot, "H · L");
+    keys.title = "H show/hide settings · L edit layout & panels";
 
     // a dragged window could end up off a shrunken screen; bring it back
     // to the middle instead
@@ -5060,8 +5198,6 @@ sanitizeState(S);
 
 window.addEventListener("resize", resize);
 window.addEventListener("keydown", function (e) {
-  // F6 re-rolls the wallpaper, matching the MAUI build's keybind.
-  if (e.key === "F6") { e.preventDefault(); dashboard.reroll(); requestDraw(); return; }
   if (LayoutEditor.isActive()) { LayoutEditor.key(e); return; }
   // never while typing — an "h" in the scene-code box is just a letter
   const t = e.target;
@@ -5116,6 +5252,7 @@ function tick(now) {
   last = now;
   // Clamp huge gaps (tab suspended, machine asleep) so nothing leaps.
   if (dt > 0.25) dt = 0.25;
+  dashboard.tickBackground(dt);
   const speed = S.anim.speed;
   // At speed 0 nothing moves, so the last frame stays valid until something
   // else — a resize, a setting — changes the picture.
@@ -5184,7 +5321,7 @@ window.__hacker = {
   stop: function () { wePaused = true; syncRunning(); },
   start: function () { wePaused = false; syncRunning(); },
   reroll: function () { dashboard.reroll(); },
-  setBackground: function (key) { dashboard.bg = new BackgroundLayer(key); },
+  setBackground: function (key) { dashboard.setBackground(key); },
   setHostFps: function (v) { window.wallpaperPropertyListener.applyGeneralProperties({ fps: v }); },
   fpsCap: function () { return targetDt > 0 ? 1 / targetDt : 0; },
   settings: function () { return S; },
