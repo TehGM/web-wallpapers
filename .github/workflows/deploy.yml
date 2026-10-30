@@ -34,6 +34,20 @@ jobs:
             --exclude='_zips' \
             ./ _site/
 
+      # Cache busting for the gallery: stamp the commit into the asset
+      # queries so a browser that cached styles.css or script.js under the
+      # previous page refetches them (GitHub Pages caches assets for 10 min,
+      # browsers often far longer). Wallpaper folders are untouched — each is
+      # a single self-contained index.html.
+      - name: Stamp asset versions
+        run: |
+          set -euo pipefail
+          v="${GITHUB_SHA::8}"
+          sed -i "s/?v=dev/?v=$v/g" _site/index.html
+          grep -q "styles.css?v=$v" _site/index.html             || { echo "::error::styles.css version stamp missing"; exit 1; }
+          grep -q "script.js?v=$v" _site/index.html             || { echo "::error::script.js version stamp missing"; exit 1; }
+          echo "gallery assets stamped with $v"
+
       - name: Bundle each wallpaper
         run: |
           set -euo pipefail
