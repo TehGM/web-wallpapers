@@ -43,9 +43,10 @@ jobs:
         run: |
           set -euo pipefail
           v="${GITHUB_SHA::8}"
-          sed -i "s/?v=dev/?v=$v/g" _site/index.html
-          grep -q "styles.css?v=$v" _site/index.html             || { echo "::error::styles.css version stamp missing"; exit 1; }
-          grep -q "script.js?v=$v" _site/index.html             || { echo "::error::script.js version stamp missing"; exit 1; }
+          sed -i "s/?v=dev/?v=$v/g" _site/index.html
+          for f in styles.css script.js; do
+            grep -q "$f?v=$v" _site/index.html || { echo "::error::$f version stamp missing"; exit 1; }
+          done
           echo "gallery assets stamped with $v"
 
       - name: Bundle each wallpaper
